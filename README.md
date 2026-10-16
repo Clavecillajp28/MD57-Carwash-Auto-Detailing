@@ -1,5 +1,10 @@
 # MD57 deployment copy
 
+For Vercel, follow [docs/VERCEL.md](docs/VERCEL.md). The prepared deployment
+proxies requests to a persistent Flask server so SQLite records, background
+workers and live updates keep working. Set `MD57_BACKEND_ORIGIN` in Vercel before
+deploying. This is a split deployment; Flask does not run in Vercel Functions.
+
 This folder contains the application, runtime dependencies, a consistent snapshot
 of the existing database, the current private configuration, the audit text log,
 and the operations/recovery guide. Python 3.14 was used for validation.

@@ -1,0 +1,19 @@
+# Only the routing build is needed on Vercel. Never upload private shop data.
+.env
+.env.*
+*.db
+*.db-*
+*.sqlite*
+*.log
+.venv/
+.runtime/
+backups/
+__pycache__/
+**/__pycache__/
+.git/
+_Backend/
+_Frontend/
+docs/
+requirements.txt
+pyproject.toml
+manage-server.ps1

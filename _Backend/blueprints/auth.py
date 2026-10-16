@@ -160,7 +160,11 @@ def google_login():
         session['oauth_next'] = next_url
     else:
         session.pop('oauth_next', None)
-    redirect_uri = url_for('auth.google_auth_callback', _external=True)
+    public_base = current_app.config.get('PUBLIC_BASE_URL', '').rstrip('/')
+    redirect_uri = (
+        public_base + url_for('auth.google_auth_callback')
+        if public_base else url_for('auth.google_auth_callback', _external=True)
+    )
     return oauth.google.authorize_redirect(redirect_uri)
 
 
