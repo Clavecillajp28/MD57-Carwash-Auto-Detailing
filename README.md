@@ -5,6 +5,10 @@ proxies requests to a persistent Flask server so SQLite records, background
 workers and live updates keep working. Set `MD57_BACKEND_ORIGIN` in Vercel before
 deploying. This is a split deployment; Flask does not run in Vercel Functions.
 
+For a temporary presentation with generated history, see
+[60-workday demo setup](docs/DEMO_HISTORY.md). It requires explicit opt-in and
+keeps simulated records separate from real accuracy evidence.
+
 This folder contains the application, runtime dependencies, a consistent snapshot
 of the existing database, the current private configuration, the audit text log,
 and the operations/recovery guide. Python 3.14 was used for validation.

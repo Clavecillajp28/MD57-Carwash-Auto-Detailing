@@ -267,6 +267,19 @@ def add_header(response):
 # Note: persistent production storage may require an external database on Vercel.
 init_db()
 
+# Opt-in for temporary presentations, including hosts without shell access.
+# The batch is transactional and idempotent on the current database.
+app.config['DEMO_HISTORY'] = None
+if os.environ.get('MD57_DEMO_HISTORY', 'false').lower() in ('true', '1'):
+    from demo_history import seed_demo_history
+    app.config['DEMO_HISTORY'] = seed_demo_history()
+    print('[DEMO] 60 simulated workdays loaded; not evidence of real-world accuracy.')
+
+
+@app.context_processor
+def demo_history_notice():
+    return {'demo_history': app.config.get('DEMO_HISTORY')}
+
 # Register application blueprints.
 from blueprints.auth import auth_bp
 from blueprints.pages import pages_bp

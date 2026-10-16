@@ -14,6 +14,7 @@ __pycache__/
 _Backend/
 _Frontend/
 docs/
+tests/
 requirements.txt
 pyproject.toml
 manage-server.ps1
