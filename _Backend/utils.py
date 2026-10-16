@@ -6,7 +6,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import session, request, jsonify, redirect, url_for, has_request_context
+from flask import session, request, jsonify, redirect, url_for, has_request_context, current_app
 from flask_mail import Message
 from markupsafe import escape
 
@@ -64,6 +64,16 @@ def _deliver_branded_email(subject, recipient, heading, plain_text_body, highlig
     </div>
     """
 
+    transport = current_app.config.get('MAIL_TRANSPORT', 'smtp')
+    if transport == 'brevo':
+        from email_transport import send_brevo
+        # Keep API email independent of attachments and public asset URLs.
+        # The text brand heading above remains when the local CID logo is removed.
+        import re
+        html_body = re.sub(r'<img\b[^>]*>', '', html_body)
+        return send_brevo(subject, recipient, plain_text_body, html_body, message_id)
+    if transport != 'smtp':
+        raise RuntimeError('MAIL_TRANSPORT must be smtp or brevo.')
     msg = Message(subject=subject, recipients=[recipient], body=plain_text_body, html=html_body)
     if message_id:
         msg.msgId=message_id

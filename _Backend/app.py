@@ -97,6 +97,8 @@ app.config["SESSION_COOKIE_SECURE"] = (
 )
 
 # Email configuration
+app.config['MAIL_TRANSPORT'] = os.environ.get('MAIL_TRANSPORT', 'smtp').strip().lower()
+app.config['BREVO_API_KEY'] = os.environ.get('BREVO_API_KEY')
 app.config["MAIL_SERVER"] = os.environ.get(
     "MAIL_SERVER", "smtp.gmail.com"
 )
@@ -112,7 +114,7 @@ app.config["MAIL_DEFAULT_SENDER"] = os.environ.get(
     app.config["MAIL_USERNAME"],
 )
 
-if (
+if app.config['MAIL_TRANSPORT'] == 'smtp' and (
     not app.config["MAIL_USERNAME"]
     or not app.config["MAIL_PASSWORD"]
 ):
