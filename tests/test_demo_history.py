@@ -48,6 +48,11 @@ class DemoHistoryTests(unittest.TestCase):
                 self.assertLessEqual(row['arrived_at'], row['started_at'])
                 self.assertLess(row['started_at'], row['completed_at'])
                 self.assertLess(row['completed_at'], row['picked_up_at'])
+                self.assertEqual(row['picked_up_by'], row['assigned_staff_id'])
+                self.assertTrue(row['picked_up_by_name'].strip())
+                for field in ('customer_name','vehicle_plate_number','vehicle_model','vehicle_type',
+                              'booking_date','booking_time','created_at','completed_at','picked_up_at'):
+                    self.assertTrue(row[field], field)
                 key = (row['booking_date'], row['assigned_bay'])
                 if key in ends:
                     self.assertLessEqual(ends[key], row['started_at'])
@@ -86,6 +91,39 @@ class DemoHistoryTests(unittest.TestCase):
         try:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM users').fetchone()[0], count)
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM staff_attendance').fetchone()[0], 0)
+        finally:
+            conn.close()
+
+    def test_existing_batch_pickup_details_repaired_without_changing_live_records(self):
+        summary = seed_demo_history(date(2026, 10, 16))
+        conn = database.get_db_connection()
+        first = conn.execute("SELECT reservation_id FROM reservations WHERE is_synthetic=1 AND queue_status='completed' LIMIT 1").fetchone()[0]
+        # Emulate an older deployed batch, plus an archived presentation row.
+        conn.execute("UPDATE reservations SET picked_up_by=NULL,picked_up_by_name=NULL WHERE reservation_id=?", (first,))
+        archived = first + 100000
+        conn.execute('''INSERT INTO reservations_archive
+            (reservation_id,vehicle_plate_number,queue_status,assigned_staff_id,
+             booking_date,completed_at,is_synthetic) VALUES (?, 'DEMO-OLD-0001',
+             'completed',?,'2026-10-16','2026-10-16 12:00:00',1)''', (archived, summary['staff_ids'][0]))
+        real = conn.execute('''INSERT INTO reservations
+            (vehicle_plate_number,vehicle_type,queue_status,assigned_staff_id,booking_date,completed_at,is_synthetic)
+            VALUES ('REAL-5701','Small','completed',?,'2026-10-16','2026-10-16 12:00:00',0)''',
+            (summary['staff_ids'][0],)).lastrowid
+        conn.commit()
+        conn.close()
+        self.assertTrue(seed_demo_history(date(2026, 10, 16))['already_loaded'])
+        conn = database.get_db_connection()
+        try:
+            for table, identity in [('reservations', first), ('reservations_archive', archived)]:
+                row = conn.execute(f'SELECT * FROM {table} WHERE reservation_id=?', (identity,)).fetchone()
+                self.assertTrue(row['picked_up_at'])
+                self.assertTrue(row['picked_up_by_name'])
+                self.assertIn(row['picked_up_by'], summary['staff_ids'])
+            untouched = conn.execute('SELECT * FROM reservations WHERE reservation_id=?', (real,)).fetchone()
+            self.assertIsNone(untouched['picked_up_by'])
+            self.assertIsNone(untouched['picked_up_by_name'])
+            self.assertIsNone(untouched['picked_up_at'])
+            self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(), [])
         finally:
             conn.close()
 

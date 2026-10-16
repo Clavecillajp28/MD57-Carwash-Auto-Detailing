@@ -27,7 +27,10 @@ accuracy and are excluded from real-data model training and holdout evaluation.
 Use actual observed walk-in services for those measurements.
 
 Repeated starts on the same database reuse the first batch, without adding rows
-or moving its dates. Free Render storage can disappear on restart or sleep; if
+or moving its dates. Startup also fills missing pickup confirmation details in
+older generated batches, including archived presentation records; actual live
+records are never backfilled with fictional actions. Customer email stays
+optional. Free Render storage can disappear on restart or sleep; if
 the database is reset, startup generates another demo batch in the new database.
 Keep DEFAULT_ADMIN_PASSWORD configured for the fresh Owner bootstrap in that
 case. Download a private backup from Operations before the presentation if you

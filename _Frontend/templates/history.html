@@ -479,7 +479,7 @@
         let isCancelled = car.status === 'cancelled';
 
         document.getElementById('detCustomer').innerText = car.customer_name || 'N/A';
-        document.getElementById('detEmail').innerText = car.email || 'N/A';
+        document.getElementById('detEmail').innerText = car.email || 'Not provided (optional)';
         document.getElementById('detPlate').innerText = car.plate_number || 'N/A';
         document.getElementById('detLoyalty').innerText = loyaltyStatus;
         document.getElementById('detLastVisit').innerText = car.last_visit || 'No completed visit yet';

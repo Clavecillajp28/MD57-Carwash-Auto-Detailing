@@ -22,10 +22,29 @@ def workdays(end):
     return list(reversed(days))
 
 
+def _complete_pickup_details(conn, summary):
+    """Upgrade only this batch's fictional records, including archived history."""
+    ids = summary.get('staff_ids', [])
+    if not ids:
+        return
+    for table in ('reservations', 'reservations_archive'):
+        conn.execute(f'''UPDATE {table} SET
+            picked_up_at=COALESCE(NULLIF(picked_up_at,''),datetime(completed_at,'+5 minutes')),
+            picked_up_by=COALESCE(picked_up_by,assigned_staff_id),
+            picked_up_by_name=COALESCE(NULLIF(TRIM(picked_up_by_name),''),
+                (SELECT COALESCE(fullname,username) FROM users WHERE user_id=COALESCE({table}.picked_up_by,{table}.assigned_staff_id)))
+            WHERE is_synthetic=1 AND queue_status='completed' AND completed_at IS NOT NULL
+                AND assigned_staff_id IN ({','.join('?' for _ in ids)})
+                AND booking_date BETWEEN ? AND ? AND vehicle_plate_number LIKE 'DEMO-%'
+                AND (picked_up_at IS NULL OR picked_up_at='' OR picked_up_by IS NULL
+                     OR picked_up_by_name IS NULL OR TRIM(picked_up_by_name)='')''',
+            [*ids, summary['start'], summary['end']])
+
+
 def seed_demo_history(end=None):
     """Add one identifiable batch; repeated starts do not duplicate it.
 
-    Existing accounts and records are never updated. Demo staff cannot log in.
+    Existing live accounts and records are never updated. Demo staff cannot log in.
     No notifications are sent, and no model predictions or real accuracy
     measurements are invented. Date defaults use the shop timezone.
     """
@@ -42,8 +61,10 @@ def seed_demo_history(end=None):
             batch_key TEXT PRIMARY KEY, summary_json TEXT NOT NULL)''')
         prior = conn.execute('SELECT summary_json FROM demo_history_batches WHERE batch_key=?', (BATCH,)).fetchone()
         if prior:
+            summary = json.loads(prior[0])
+            _complete_pickup_details(conn, summary)
             conn.commit()
-            return {**json.loads(prior[0]), 'already_loaded': True}
+            return {**summary, 'already_loaded': True}
         catalog = [dict(r) for r in conn.execute('''
             SELECT s.service_id,s.service_name,s.service_type,s.default_bay,
                 s.base_duration_minutes,p.vehicle_type,p.price,v.multiplier_minutes
@@ -95,7 +116,7 @@ def seed_demo_history(end=None):
                 arrival = opening + timedelta(minutes=minute)
                 bay = rng.choices(bays, [5, 4, 2])[0]
                 service = rng.choice(choices[bay])
-                user_id, _ = staff[bays.index(bay)]
+                user_id, staff_name = staff[bays.index(bay)]
                 standard = service['base_duration_minutes'] + service['multiplier_minutes']
                 duration = max(10, round(standard * rng.uniform(0.8, 1.3) + rain))
                 start = max(arrival, available[bay])
@@ -122,6 +143,8 @@ def seed_demo_history(end=None):
                     'started_at': None if cancelled else start.strftime(STAMP),
                     'completed_at': None if cancelled else finish.strftime(STAMP),
                     'picked_up_at': None if cancelled else (finish + timedelta(minutes=rng.randint(3, 15))).strftime(STAMP),
+                    'picked_up_by': None if cancelled else user_id,
+                    'picked_up_by_name': None if cancelled else staff_name,
                     'cancelled_at': (arrival + timedelta(minutes=15)).strftime(STAMP) if cancelled else None,
                     'cancel_reason': 'customer' if cancelled else None,
                     'assigned_staff_id': user_id, 'price': service['price'],

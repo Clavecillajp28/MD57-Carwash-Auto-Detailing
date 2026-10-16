@@ -372,7 +372,7 @@ def api_get_history():
                r.ready_notified_at,
                r.picked_up_at,
                r.picked_up_by,
-               r.picked_up_by_name,
+               COALESCE(NULLIF(TRIM(r.picked_up_by_name),''), pu.fullname, pu.username) AS picked_up_by_name,
                r.cancel_reason,
                r.queue_status AS status,
                r.is_synthetic,
@@ -381,6 +381,7 @@ def api_get_history():
         JOIN services s ON r.service_id = s.service_id
         LEFT JOIN users u ON r.user_id = u.user_id
         LEFT JOIN users su ON r.assigned_staff_id = su.user_id
+        LEFT JOIN users pu ON r.picked_up_by = pu.user_id
         WHERE r.queue_status IN ('completed', 'cancelled')
     """
     query += ' AND ' + source_sql(source, 'r')
