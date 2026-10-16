@@ -13,6 +13,7 @@ from datetime import datetime
 from statistics import median
 
 from database import get_db_connection
+from data_scope import source_sql
 
 MAX_MODEL_LENGTH = 60
 
@@ -38,17 +39,18 @@ def canonical_vehicle_model(cursor, typed):
     return by_short_name[0] if len(by_short_name) == 1 else text
 
 
-def vehicle_visits():
+def vehicle_visits(source='real'):
     """{plate key: {'days': [date, ...] oldest first, 'model': the most
     recently recorded model for that plate, or None}} for every vehicle
     with at least one visit."""
     conn = get_db_connection()
     rows = conn.execute(
-        """
+        f"""
         SELECT vehicle_plate_number, substr(completed_at, 1, 10) AS day, vehicle_model
-        FROM reservations
+        FROM reservations r
         WHERE queue_status IN ('ready', 'completed')
           AND completed_at IS NOT NULL AND completed_at != ''
+          AND {source_sql(source, 'r')}
         ORDER BY completed_at
         """
     ).fetchall()

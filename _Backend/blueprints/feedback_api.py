@@ -91,7 +91,11 @@ def api_get_feedbacks():
     is_staff_or_admin = session.get('role') in ('admin', 'staff')
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT feedback_id, reservation_id, customer_name, plate_number, service_type, rating, comment, created_at FROM feedbacks ORDER BY feedback_id DESC")
+    cursor.execute('''SELECT f.feedback_id,f.reservation_id,f.customer_name,f.plate_number,
+        f.service_type,f.rating,f.comment,f.created_at FROM feedbacks f
+        LEFT JOIN reservations r ON r.reservation_id=f.reservation_id
+        LEFT JOIN reservations_archive a ON a.reservation_id=f.reservation_id
+        WHERE COALESCE(r.is_synthetic,a.is_synthetic,0)=0 ORDER BY f.feedback_id DESC''')
     rows = [dict(row) for row in cursor.fetchall()]
     if not is_staff_or_admin:
         for row in rows:

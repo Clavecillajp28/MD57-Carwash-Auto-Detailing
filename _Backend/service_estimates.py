@@ -75,9 +75,9 @@ class ServiceEstimates:
         if key not in self.durations:
             rows = self.cursor.execute("""
                 SELECT started_at, completed_at FROM (
-                    SELECT service_id,vehicle_type,queue_status,started_at,completed_at FROM reservations
+                    SELECT service_id,vehicle_type,queue_status,started_at,completed_at FROM reservations WHERE is_synthetic=0
                     UNION ALL
-                    SELECT service_id,vehicle_type,queue_status,started_at,completed_at FROM reservations_archive
+                    SELECT service_id,vehicle_type,queue_status,started_at,completed_at FROM reservations_archive WHERE is_synthetic=0
                 ) WHERE service_id=? AND vehicle_type=? AND queue_status IN ('ready','completed')
                   AND completed_at<=? AND started_at IS NOT NULL
                 ORDER BY completed_at DESC LIMIT ?

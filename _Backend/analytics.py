@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 from statistics import median
 
 from database import get_db_connection
-from data_scope import SOURCES, parse_source, source_sql
+from data_scope import SOURCES, parse_source, source_sql, demo_staff_ids
 from extensions import mcda_engine
 from settings import get_setting
 from utils import MAX_PLAUSIBLE_SERVICE_MINUTES
@@ -300,7 +300,7 @@ def mcda_criteria(cursor, staff_id, since=None, until=None, source='real'):
 
 
 # ---------------------------------------------------------------- the report
-def build(start, end, now=None, source='all'):
+def build(start, end, now=None, source='real'):
     """Everything the Analytics page and its PDFs show, for start..end (dates, inclusive)."""
     now = now or datetime.now()
     source = parse_source(source)
@@ -316,6 +316,13 @@ def build(start, end, now=None, source='all'):
     bays = len({r[0] for r in cursor.execute('SELECT DISTINCT default_bay FROM services WHERE is_active = 1')}) or 1
     staff_accounts = cursor.execute(
         "SELECT user_id, COALESCE(fullname, username) AS name FROM users WHERE role = 'staff' ORDER BY name").fetchall()
+    fictional_staff = demo_staff_ids(cursor)
+    if source == 'real':
+        staff_accounts = [r for r in staff_accounts if r['user_id'] not in fictional_staff]
+    elif source == 'synthetic':
+        # Keep real employee names out of the presentation ranking, including
+        # employees with no records in the selected source.
+        staff_accounts = [r for r in staff_accounts if r['user_id'] in fictional_staff]
     attendance = _attendance(cursor, prev_start_dt.date(), end, source)
     feedback = cursor.execute(f"""
         SELECT f.rating, f.created_at, r.assigned_staff_id, r.completed_at
@@ -369,8 +376,9 @@ def build(start, end, now=None, source='all'):
 
     report = {
         'source': {'key': source, 'label': SOURCES[source],
-                   'note': 'Includes synthetic history; these figures do not establish real-world prediction accuracy.' if source != 'real'
-                           else 'Real records only. Synthetic history is excluded from operational recommendations.'},
+                   'note': ('Simulated records for presentation; not real employee performance or field validation.' if source == 'synthetic'
+                            else 'Includes simulated records; not field validation.' if source == 'all'
+                            else 'Actual operational records. Presentation history is excluded.')},
         'period': {
             'start': start.isoformat(), 'end': end.isoformat(), 'days': days, 'label': period_label(start, end),
             'comparable': comparable, 'first_record': first_record.date().isoformat() if first_record else None,

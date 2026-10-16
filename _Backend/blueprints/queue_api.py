@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, request, session
 import slot_hold
 from assignment import announce, choose_washer
 from database import get_db_connection
+from data_scope import SOURCES, parse_source, source_sql
 from extensions import ai_predictor
 from wait_estimate import ahead_of_walk_ins, work_ahead_minutes
 from service_estimates import ServiceEstimates
@@ -345,6 +346,12 @@ def api_get_history():
     (admin can still restore them from there); this is the read-only
     record of both outcomes together, newest first by whichever timestamp
     actually closed the booking out."""
+    try:
+        source = parse_source(request.args.get('source'))
+    except ValueError as error:
+        return jsonify(status='error', message=str(error)), 400
+    if session.get('role') == 'staff' and source != 'real':
+        return jsonify(status='error', message='Presentation history is available to managers only.'), 403
     conn = get_db_connection()
     cursor = conn.cursor()
     query = """
@@ -368,6 +375,7 @@ def api_get_history():
                r.picked_up_by_name,
                r.cancel_reason,
                r.queue_status AS status,
+               r.is_synthetic,
                COALESCE(su.fullname, su.username) AS washer
         FROM reservations r
         JOIN services s ON r.service_id = s.service_id
@@ -375,6 +383,7 @@ def api_get_history():
         LEFT JOIN users su ON r.assigned_staff_id = su.user_id
         WHERE r.queue_status IN ('completed', 'cancelled')
     """
+    query += ' AND ' + source_sql(source, 'r')
     params = []
     if session.get('role') == 'staff':
         # A staff session only sees jobs *they* actually handled
@@ -386,8 +395,10 @@ def api_get_history():
         # view. Admin keeps seeing every record, same as before.
         query += " AND r.assigned_staff_id = ?"
         params.append(session.get('user_id'))
-    query += " ORDER BY COALESCE(r.picked_up_at, r.completed_at, r.cancelled_at) DESC, r.reservation_id DESC"
-    cursor.execute(query, params)
+    archive_query = query.replace('FROM reservations r', 'FROM reservations_archive r')
+    archive_query += ' AND NOT EXISTS (SELECT 1 FROM reservations live WHERE live.reservation_id=r.reservation_id)'
+    cursor.execute('SELECT * FROM (' + query + ' UNION ALL ' + archive_query +
+                   ') ORDER BY COALESCE(picked_up_at, completed_at, cancelled_at) DESC, id DESC', params * 2)
     history_records = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
@@ -395,10 +406,11 @@ def api_get_history():
     # vehicle, counted across every completed visit on file (see
     # vehicles.py) - not just the rows this session is shown, so a staff
     # member's own-jobs-only history still reports a car's real totals.
-    vehicles = vehicle_visits()
+    vehicles = vehicle_visits(source=source)
     for record in history_records:
         record.update(visit_summary(vehicles.get(plate_key(record['plate_number']))))
-    return jsonify({'status': 'success', 'data': history_records}), 200
+    return jsonify({'status': 'success', 'data': history_records,
+                    'source': {'key': source, 'label': SOURCES[source]}}), 200
 
 
 @queue_api_bp.route('/api/available-times', methods=['GET'])

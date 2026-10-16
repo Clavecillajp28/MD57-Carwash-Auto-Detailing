@@ -18,7 +18,7 @@ def api_analytics():
     """Everything on the Analytics page for ?days=7|30|90, or ?start=&end= (YYYY-MM-DD)."""
     try:
         start, end = analytics.parse_period(request.args)
-        source = parse_source(request.args.get('source', 'all'))
+        source = parse_source(request.args.get('source', 'real'))
     except ValueError as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
     return jsonify({'status': 'success', **analytics.build(start, end, source=source)}), 200
@@ -37,7 +37,7 @@ def api_analytics_export():
         return jsonify({'status': 'error', 'message': 'Unknown chart for that section.'}), 400
     try:
         start, end = analytics.parse_period(request.args)
-        source = parse_source(request.args.get('source', 'all'))
+        source = parse_source(request.args.get('source', 'real'))
     except ValueError as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 

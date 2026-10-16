@@ -97,18 +97,17 @@ def api_staff_real_metrics():
     cursor = conn.cursor()
     staff_rows = _fetch_staff_accounts(cursor)
 
-    # Display the same system history as Analytics, including generated
-    # records retained by the shop. Only the live table supplies active jobs;
+    # The operational roster uses observed work only. Only the live table supplies active jobs;
     # an archived record can contribute a finished service, never a live task.
     today = datetime.now().strftime('%Y-%m-%d')
     cursor.execute(
         """
         WITH jobs AS (
             SELECT assigned_staff_id, queue_status, completed_at, vehicle_plate_number
-            FROM reservations
+            FROM reservations WHERE is_synthetic=0
             UNION ALL
             SELECT assigned_staff_id, queue_status, completed_at, vehicle_plate_number
-            FROM reservations_archive WHERE queue_status IN ('ready', 'completed')
+            FROM reservations_archive WHERE queue_status IN ('ready', 'completed') AND is_synthetic=0
         )
         SELECT assigned_staff_id,
                SUM(CASE WHEN queue_status IN ('ready', 'completed') THEN 1 ELSE 0 END) AS completed_jobs,
@@ -126,7 +125,7 @@ def api_staff_real_metrics():
 
     results = []
     for staff in staff_rows:
-        speed, punctuality, rating, _ = mcda_criteria(cursor, staff['user_id'], source='all')
+        speed, punctuality, rating, _ = mcda_criteria(cursor, staff['user_id'], source='real')
         jobs = jobs_by_staff.get(staff['user_id'])
         results.append({
             'user_id': staff['user_id'],
