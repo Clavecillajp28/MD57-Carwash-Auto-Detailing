@@ -189,9 +189,6 @@
              after the sidebar. -->
         <div class="content-with-sidebar">
             <div class="main-container">
-                {% if demo_history %}
-                <p role="note">Demonstration includes 60 simulated workdays ({{ demo_history.start }} to {{ demo_history.end }}). These records do not establish real-world prediction accuracy.</p>
-                {% endif %}
                 {% block content %}{% endblock %}
             </div>
 

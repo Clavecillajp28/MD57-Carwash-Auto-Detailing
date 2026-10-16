@@ -11,6 +11,24 @@ import backups
 operations_bp=Blueprint('operations',__name__)
 
 
+@operations_bp.route('/api/operations/employees/import', methods=['POST'])
+@role_required('admin')
+@owner_only
+def employee_import():
+    from employee_transfer import import_employees, MAX_BYTES
+    # Bound uploads before parsing multipart data, independently of other routes.
+    request.max_content_length = MAX_BYTES + 16384
+    upload = request.files.get('file')
+    if not upload:
+        return jsonify(status='error', message='Choose your encrypted employee transfer file.'), 400
+    try:
+        result = import_employees(upload.read(MAX_BYTES + 1), current_app.secret_key)
+    except ValueError as error:
+        return jsonify(status='error', message=str(error)), 400
+    log_activity(session['user'], f'Imported employee logins: {result["added"]} added, {result["skipped"]} already present')
+    return jsonify(status='success', **result)
+
+
 @operations_bp.route('/operations')
 @role_required('admin')
 def operations_page():

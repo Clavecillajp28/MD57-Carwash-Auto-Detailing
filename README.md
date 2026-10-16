@@ -9,6 +9,9 @@ For a temporary presentation with generated history, see
 [60-workday demo setup](docs/DEMO_HISTORY.md). It requires explicit opt-in and
 keeps simulated records separate from real accuracy evidence.
 
+To sign in with existing local employee accounts after hosting, follow
+[the private employee transfer guide](docs/EMPLOYEE_TRANSFER.md).
+
 This folder contains the application, runtime dependencies, a consistent snapshot
 of the existing database, the current private configuration, the audit text log,
 and the operations/recovery guide. Python 3.14 was used for validation.

@@ -15,7 +15,8 @@ Existing accounts and records stay unchanged.
 
 Log in with your existing Owner account. Open History or Manager Analytics,
 select the last 90 days and choose All records or Synthetic records. Real records
-intentionally excludes this batch. A page notice identifies the demonstration.
+intentionally excludes this batch. History identifies DEMO plates, and analytics
+and reports retain their data-source disclosure; no notice appears site-wide.
 No historical model predictions are invented. These rows cannot establish real
 accuracy and are excluded from real-data model training and holdout evaluation.
 Use actual observed walk-in services for those measurements.
@@ -27,6 +28,6 @@ Keep DEFAULT_ADMIN_PASSWORD configured for the fresh Owner bootstrap in that
 case. Download a private backup from Operations before the presentation if you
 need to keep any work done during the session.
 
-Setting MD57_DEMO_HISTORY=false stops generation and the site-wide demo notice;
+Setting MD57_DEMO_HISTORY=false stops generation and the history-page notice;
 it does not remove records or their synthetic provenance in analytics. Keep it
 enabled for the presentation. Do not use this setting on a real shop deployment.

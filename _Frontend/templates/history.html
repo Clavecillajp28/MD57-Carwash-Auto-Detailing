@@ -141,6 +141,7 @@
 
 {% block content %}
             <h2 class="page-title"><i class="fa-solid fa-clock-rotate-left"></i> Service History & Customer Database</h2>
+            {% if demo_history %}<p role="note">Entries with DEMO plates are simulated presentation history. Use Analytics source filters to view real records separately.</p>{% endif %}
             {% if role == 'staff' %}
             <p class="page-subtitle">Showing your own service history only - jobs you personally handled. Every job that's finished - completed or cancelled - lands here automatically, chronologically sorted.</p>
             {% else %}
