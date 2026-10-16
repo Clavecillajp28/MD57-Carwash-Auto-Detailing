@@ -1,0 +1,655 @@
+/* MD57 design foundation - loaded first on every page (the app shell via
+   base.html, and the four sign-in pages), before style.css / auth.css.
+
+   1. TOKENS      the only colours, type sizes, radii, shadows and motion
+                  speeds the system uses, for both themes.
+   2. COMPONENTS  the one definition of each shared piece: buttons, fields,
+                  cards, stat tiles, tables, badges, queue cards, pop-ups.
+
+   Pages add layout (grids, widths, spacing) in their own styles; they don't
+   restate how a button, card or table looks. */
+
+/* ============================== 1. TOKENS ============================== */
+:root {
+    /* Brand - from the MD57 logo */
+    --navy-950: #050b16;
+    --gold-300: #e6cd8a;
+    --gold-400: #d4b25e;
+    --gold-700: #86651c;
+
+    /* Light theme */
+    --bg: #f2f4f8;
+    --bg-gradient: radial-gradient(1200px 600px at 20% -10%, #ffffff 0%, #f2f4f8 55%, #e8ecf2 100%);
+    --bg-overlay: rgba(242, 244, 248, 0.93);   /* the wash over the logo artwork on the sign-in pages */
+    --glass: #ffffff;                          /* panels that sit on the page */
+    --edge: rgba(134, 101, 28, 0.45);          /* the thin gold line on a featured panel */
+    --edge-soft: var(--border);                /* ...and the top edge every panel gets */
+    --table-head: #f1f3f7;
+    --shell-bg: #ffffff;                       /* sidebar */
+    --shell-solid: #ffffff;                    /* ...and the part of it that must hide what scrolls beneath */
+    --glow-live: 0 0 0 1px rgba(21, 128, 61, 0.28), 0 0 16px rgba(21, 128, 61, 0.16);
+    --glow-pending: 0 0 0 1px rgba(29, 79, 196, 0.25), 0 0 16px rgba(29, 79, 196, 0.14);
+    --surface-raised: #ffffff;
+    --surface-hover: #ffffff;
+    --surface-sunken: #f1f3f7;
+    --border: #dbe1ea;
+    --border-strong: #b9c3d1;
+
+    --text-strong: #0d1b30;
+    --text: #27313f;
+    --text-muted: #556274;
+    --accent: var(--gold-700);
+    --accent-fill: linear-gradient(135deg, #d4b25e 0%, #b88f33 100%);
+    --accent-soft: rgba(134, 101, 28, 0.10);
+    --on-accent: #0a1424;   /* text on the gold fill, both themes */
+    --on-fill: #ffffff;     /* text on a solid status/accent colour */
+
+    /* Status - with the brand colours, the only colours in the system */
+    --success: #15803d;  --success-soft: rgba(21, 128, 61, 0.10);
+    --warning: #a8620a;  --warning-soft: rgba(168, 98, 10, 0.10);
+    --danger:  #b42323;  --danger-soft:  rgba(180, 35, 35, 0.09);
+    --info:    #1d4fc4;  --info-soft:    rgba(29, 79, 196, 0.09);
+
+    --skeleton: #e3e8ef;  --skeleton-shine: #f4f6f9;
+
+    /* Chart series. Chart.js paints on a canvas and can't read these
+       itself - the pages ask for them through common.js's themeColor(). */
+    --chart-1: #b88f33;          /* the main series: gold */
+    --chart-muted: #94a3b8;
+    --chart-grid: rgba(13, 27, 48, 0.09);
+    /* Analytics series (validated: dataviz validate_palette.js on the card
+       surface). viz-accent = the one series that matters; cat-1..4 =
+       categorical slots for part-to-whole, always used in this order. */
+    --viz-accent: #b88f33;
+    --viz-rain: #2a78d6;
+    --viz-cat-1: #2a78d6;  --viz-cat-2: #eb6834;  --viz-cat-3: #1baf7a;  --viz-cat-4: #eda100;
+
+    /* Type: two families, six sizes, nothing under 12px */
+    --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, Tahoma, Arial, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, Arial, sans-serif;
+    --text-xs: 12px;  --text-sm: 13px;  --text-md: 15px;
+    --text-lg: 18px;  --text-xl: 24px;  --text-2xl: 32px;
+
+    /* Shape */
+    --radius-sm: 6px;  --radius-md: 10px;  --radius-lg: 16px;  --radius-pill: 999px;
+    --shadow-sm: 0 1px 2px rgba(13, 27, 48, 0.06);
+    --shadow-md: 0 6px 20px rgba(13, 27, 48, 0.08);
+    --shadow-lg: 0 24px 60px rgba(13, 27, 48, 0.18);
+
+    /* Motion */
+    --fast: 150ms;  --base: 250ms;  --slow: 450ms;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    --sidebar-width: 200px;
+
+    /* Names the pages were written against, pointed at the tokens above -
+       so a page that says var(--card-bg) or var(--accent-amber) gets the
+       new palette without being edited. New code should use the tokens. */
+    --bg-light: var(--surface-sunken);
+    --card-bg: var(--surface-raised);
+    --border-color: var(--border);
+    --text-main: var(--text);
+    --text-bright: var(--text-strong);
+    --accent-amber: var(--accent);
+    --accent-amber-glow: var(--accent-soft);
+    --accent-green: var(--success);
+    --accent-red: var(--danger);
+    --sidebar-bg: var(--shell-bg);
+    --sidebar-text: var(--text);
+    --sidebar-text-active: var(--text-strong);
+    --font-heading: var(--font-display);
+}
+
+/* Dark is the default theme (set on <html> before first paint); the token
+   names are the same, only their values change. */
+html[data-theme="dark"] {
+    --bg: #060d1a;
+    --bg-gradient: radial-gradient(1100px 620px at 18% -12%, #16305a 0%, #0a1629 45%, #050b16 100%);
+    --bg-overlay: rgba(5, 11, 22, 0.94);
+    --glass: rgba(255, 255, 255, 0.05);
+    --edge: rgba(212, 178, 94, 0.55);
+    --edge-soft: rgba(212, 178, 94, 0.20);
+    --table-head: #0c182b;
+    --shell-bg: rgba(8, 16, 30, 0.74);
+    --shell-solid: #091322;
+    --glow-live: 0 0 0 1px rgba(74, 222, 128, 0.40), 0 0 22px rgba(74, 222, 128, 0.20);
+    --glow-pending: 0 0 0 1px rgba(124, 176, 255, 0.40), 0 0 22px rgba(124, 176, 255, 0.18);
+    --surface-raised: #0f1d33;
+    --surface-hover: #152743;
+    --surface-sunken: rgba(0, 0, 0, 0.26);
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.22);
+
+    --text-strong: #f2f6fb;
+    --text: #d6deea;
+    --text-muted: #9fadc0;
+    --accent: var(--gold-400);
+    --accent-soft: rgba(212, 178, 94, 0.13);
+    --on-fill: #0a1424;
+
+    --success: #4ade80;  --success-soft: rgba(74, 222, 128, 0.13);
+    --warning: #fbbf24;  --warning-soft: rgba(251, 191, 36, 0.13);
+    --danger:  #f87171;  --danger-soft:  rgba(248, 113, 113, 0.13);
+    --info:    #7cb0ff;  --info-soft:    rgba(124, 176, 255, 0.13);
+
+    --skeleton: rgba(255, 255, 255, 0.07);  --skeleton-shine: rgba(255, 255, 255, 0.16);
+
+    --chart-1: #d4b25e;
+    --chart-muted: #6f8098;
+    --chart-grid: rgba(255, 255, 255, 0.09);
+    --viz-accent: #b28a31;
+    --viz-rain: #3987e5;
+    --viz-cat-1: #3987e5;  --viz-cat-2: #d95926;  --viz-cat-3: #199e70;  --viz-cat-4: #c98500;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.6);
+
+    --sidebar-text-active: var(--accent);
+}
+
+/* ============================== BASE ============================== */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-variant-numeric: tabular-nums; }
+
+h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+button, input, select, textarea { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@keyframes smoothFadeIn {
+    0% { opacity: 0; transform: translateY(-15px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ============================== 2. COMPONENTS ============================== */
+
+/* ---- Buttons: four kinds, one shape. The older per-purpose class names
+   (.btn-submit, .btn-action, .page-btn ...) are kept on the markup and
+   listed here under the kind they are. ---- */
+.btn, .btn-primary, .btn-secondary, .btn-danger,
+.btn-submit, .btn-action, .btn-notify, .btn-restore,
+.btn-export, .btn-reset, .btn-timeclock-trigger, .page-btn, .btn-page, .btn-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease),
+                background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.btn:active, .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-submit:active, .btn-action:active { transform: scale(0.97); }
+
+/* Primary - the gold fill */
+.btn-primary, .btn-submit, .btn-action, .btn-notify, .btn-restore {
+    background: var(--accent-fill);
+    color: var(--on-accent);
+    box-shadow: 0 6px 18px rgba(193, 154, 63, 0.26);
+}
+.btn-primary:hover:not(:disabled), .btn-submit:hover:not(:disabled), .btn-action:hover:not(:disabled),
+.btn-notify:hover:not(:disabled), .btn-restore:hover:not(:disabled) {
+    box-shadow: 0 8px 26px rgba(193, 154, 63, 0.45);
+    transform: translateY(-1px);
+}
+
+/* Secondary - outline */
+.btn-secondary, .btn-export, .btn-reset, .btn-timeclock-trigger, .page-btn, .btn-page {
+    background: transparent;
+    border-color: var(--border-strong);
+    color: var(--text-strong);
+}
+.btn-secondary:hover:not(:disabled), .btn-export:hover:not(:disabled), .btn-reset:hover:not(:disabled),
+.btn-timeclock-trigger:hover:not(:disabled),
+.page-btn:hover:not(:disabled), .btn-page:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Danger - declared after primary so a button carrying both reads as danger */
+.btn-danger, .btn-clear {
+    background: var(--danger-soft);
+    border-color: transparent;
+    color: var(--danger);
+    box-shadow: none;
+}
+.btn-danger:hover:not(:disabled), .btn-clear:hover:not(:disabled) { border-color: var(--danger); box-shadow: none; transform: none; }
+
+/* Compact - row actions, pagination, table buttons */
+.btn-sm, .page-btn, .btn-page, .btn-export, .btn-notify, .btn-clear, .btn-restore {
+    min-height: 32px;
+    padding: 5px 12px;
+    font-size: var(--text-xs);
+    border-radius: var(--radius-sm);
+}
+
+.btn:disabled, .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled, .btn-submit:disabled,
+.btn-action:disabled, .page-btn:disabled, .btn-page:disabled, .btn-export:disabled, .btn-notify:disabled, .btn-clear:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ---- Fields. :where() keeps this at zero specificity, so a page's own
+   class on a field (a compact table input, a search box) still wins. ---- */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
+       select, textarea) {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-strong);
+    font-size: var(--text-md);
+    padding: 10px 12px;
+    max-width: 100%;
+    outline: none;
+    transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.75; }
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+select option { background: var(--surface-raised); color: var(--text-strong); }
+label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ---- Card ---- */
+.card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-top-color: var(--edge-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 20px;
+    color: var(--text);
+    min-width: 0;
+}
+.card h3 { color: var(--text-strong); font-size: var(--text-lg); }
+
+/* ---- Stat tile ---- */
+.stat-card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-top-color: var(--edge-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 16px 18px;
+    min-width: 0;
+}
+.stat-card h4 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.stat-card .value {
+    margin: 4px 0 0 0;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+}
+
+/* ---- Table: scrolls inside its own box, never the page ---- */
+table { width: 100%; border-collapse: collapse; }
+th, td {
+    padding: 11px 14px;
+    text-align: left;
+    font-size: var(--text-sm);
+    border-bottom: 1px solid var(--border);
+}
+th {
+    background: var(--table-head);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+tbody tr { transition: background var(--fast) var(--ease); }
+tbody tr:hover { background: var(--accent-soft); }
+.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ---- Badges: one shape; each status class only picks its colour ---- */
+.badge, [class^="badge-"], [class*=" badge-"], .status-pill, .history-status-tag, .attendance-badge, .badge-active-task {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.badge { background: var(--accent-soft); color: var(--accent); }
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.warning { background: var(--warning-soft); color: var(--warning); }
+.badge.danger  { background: var(--danger-soft);  color: var(--danger); }
+.badge.info    { background: var(--info-soft);    color: var(--info); }
+
+/* ---- Queue cards (Queue, Ready, Cancelled) ---- */
+.queue-card-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; flex: 1; }
+.queue-item-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.queue-item-card:hover { border-color: var(--border-strong); transform: translateX(3px); }
+.queue-item-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.queue-item-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.queue-item-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.queue-item-details {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Pop-up windows: .modal-overlay, shown with .open (modal.js's
+   openModal/closeModal). A click on the backdrop closes it. ---- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(3, 8, 16, 0.6);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--base) var(--ease), visibility var(--base);
+}
+.modal-overlay.open { opacity: 1; visibility: visible; }
+
+.modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 22px;
+    color: var(--text);
+}
+.modal-overlay .modal-content { transform: translateY(12px) scale(0.98); transition: transform var(--base) var(--ease); }
+.modal-overlay.open .modal-content { transform: none; }
+.modal-content h3 { margin-top: 0; color: var(--text-strong); font-size: var(--text-lg); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.modal-header h3 { margin: 0; }
+.close-btn {
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    font-size: var(--text-xl);
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color var(--fast) var(--ease);
+}
+.close-btn:hover { color: var(--text-strong); }
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-sm);
+}
+.detail-label { color: var(--text-muted); font-weight: 500; flex-shrink: 0; }
+.detail-value { color: var(--text-strong); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+
+/* ---- Multi-step form stepper (booking, create-user, register) - the
+   script side is initStepper() in common.js; register.html has its own
+   small copy because it doesn't load common.js. ---- */
+.stepper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 22px;
+}
+.stepper-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+.stepper-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--bg-light);
+    border: 2px solid var(--border-color);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: var(--text-sm);
+    transition: all var(--base) ease;
+    flex-shrink: 0;
+}
+.stepper-label {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    text-align: center;
+    white-space: nowrap;
+    transition: color var(--base) ease;
+}
+.stepper-step.active .stepper-circle {
+    background: var(--accent-amber);
+    border-color: var(--accent-amber);
+    color: var(--on-fill);
+    box-shadow: 0 0 0 4px var(--accent-amber-glow);
+}
+.stepper-step.active .stepper-label { color: var(--accent-amber); }
+.stepper-step.completed .stepper-circle {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: var(--on-fill);
+}
+.stepper-step.completed .stepper-label { color: var(--accent-green); }
+.stepper-line {
+    flex: 1 1 auto;
+    height: 2px;
+    background: var(--border-color);
+    margin-top: 15px;
+    min-width: 12px;
+}
+
+.form-step { animation: smoothFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.stepper-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 20px;
+}
+.stepper-nav .btn-primary,
+.stepper-nav .btn-secondary,
+.stepper-nav .btn-submit {
+    flex: 1;
+    margin-top: 0;
+}
+
+@media (max-width: 480px) {
+    .stepper-label { display: none; }
+}
+
+/* ---- Confirm dialog (common.js's confirmDialog) - replaces the browser's
+   own confirm() box ---- */
+.confirm-dialog { z-index: 10100; }
+.confirm-dialog .modal-content { max-width: 380px; }
+.confirm-dialog p { margin: 8px 0 0; font-size: var(--text-sm); color: var(--text-muted); white-space: pre-line; }
+.confirm-dialog-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.confirm-dialog-actions button { flex: 1 1 130px; }
+
+/* ============================== 3. MOTION ==============================
+   The script side is static/js/motion.js. Three speeds (--fast / --base /
+   --slow) and one easing; nothing here is needed to use a page. */
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes list-enter { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes list-leave { to { opacity: 0; transform: translateX(16px); } }
+@keyframes loader-out { to { opacity: 0; visibility: hidden; } }
+@keyframes page-progress { 0% { width: 0; opacity: 1; } 55% { width: 72%; opacity: 1; } 100% { width: 93%; opacity: 1; } }
+
+/* ---- First-load loader: the logo inside a turning gold ring. Shown once
+   per browser session (the <head> script adds .first-load to <html> only
+   then), for under a second, and it never blocks a click - the page under
+   it is already usable. It fades itself out in CSS, so a script error
+   can't leave it up. ---- */
+html { --enter-delay: 0ms; }
+html.first-load { --enter-delay: 600ms; }
+.app-loader { display: none; }
+html.first-load .app-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 30000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: var(--bg) var(--bg-gradient);
+    pointer-events: none;
+    animation: loader-out 380ms var(--ease) 520ms forwards;
+}
+.loader-ring { position: relative; width: 92px; height: 92px; display: grid; place-items: center; }
+.loader-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0 62%, var(--gold-400) 92%, var(--gold-300));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: spin 0.9s linear infinite;
+}
+.loader-ring img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; }
+.app-loader p {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ---- Page progress: a thin gold line while the next page loads ---- */
+.page-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    z-index: 20000;
+    background: var(--accent-fill);
+    box-shadow: 0 0 10px var(--gold-400);
+    opacity: 0;
+    pointer-events: none;
+}
+.page-progress.run { animation: page-progress 2.4s var(--ease) forwards; }
+
+/* ---- Skeletons: the shape of what's loading, in place of "Loading..." ---- */
+.skeleton {
+    display: block;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, var(--skeleton) 25%, var(--skeleton-shine) 50%, var(--skeleton) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line { height: 12px; margin: 7px 0; max-width: 100%; }
+span.skeleton-line { display: inline-block; vertical-align: middle; }
+.skeleton-card { height: 60px; border-radius: var(--radius-md); margin-bottom: 10px; }
+.skeleton-card:last-child { margin-bottom: 0; }
+.skeleton-row td { border-bottom-color: transparent; }
+.skeleton-row .skeleton-line { display: block; }
+.skeleton-failed { margin: 0; padding: 14px; text-align: center; font-size: var(--text-sm); color: var(--text-muted); }
+
+/* ---- List items arriving and leaving (motion.js's renderAnimatedList) ---- */
+.list-enter { animation: list-enter var(--slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.list-leave { animation: list-leave var(--base) var(--ease) forwards; pointer-events: none; }
+
+/* ---- A status badge that just changed rings once (Queue) ---- */
+@keyframes badge-ring { from { opacity: 0.6; transform: scale(0.94); } to { opacity: 0; transform: scale(1.18); } }
+.badge-pulse { position: relative; }
+.badge-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    border: 2px solid currentColor;
+    pointer-events: none;
+    animation: badge-ring var(--slow) var(--ease) both;
+}
+
+/* Anyone who asks their device for less motion gets none: entrances and
+   the loader are skipped outright (not just sped up - a delayed entrance
+   would leave content invisible until its delay ran out). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    html.first-load .app-loader { display: none; }
+    .skeleton { animation: none; }
+}

@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+{% block page_comment %}Homepage{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Main Portal{% endblock %}
+
+{% block extra_style %}
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 25px 16px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .main-container h2 {
+            font-size: var(--text-xl);
+            margin-bottom: 8px;
+            color: var(--text-bright);
+            line-height: 1.3;
+            font-weight: 800;
+        }
+        .main-container > p {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            max-width: 650px;
+            margin-bottom: 24px;
+            padding: 0 10px;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        /* Today's numbers (admin/staff only), above everything else. */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            width: 100%;
+            max-width: 980px;
+            margin: 0 0 22px 0;
+            text-align: left;
+        }
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--accent-amber);
+        }
+        .stat-card.completed::after { background: var(--accent-green); }
+        .stat-card.staffed::after { background: var(--info); }
+        .stat-card h4 {
+            margin: 0;
+        }
+        .stat-card .value {
+            margin: 6px 0 0 0;
+        }
+        .stat-card .value small {
+            font-size: var(--text-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .stat-card.completed .value { color: var(--accent-green); }
+        .stat-card .stat-sub { margin: 4px 0 0; font-size: var(--text-xs); color: var(--text-muted); }
+        .stat-card.staffed .value { color: var(--info); }
+
+        .home-cta { margin: -8px 0 24px; text-decoration: none; }
+        .cards-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            width: 100%;
+            max-width: 980px;
+            justify-content: center;
+            padding: 0 10px;
+        }
+        .card {
+            text-align: center;
+            text-decoration: none;
+            transition: all var(--base) ease;
+            cursor: pointer;
+            flex: 1 1 250px;
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            outline: none !important;
+        }
+        .card:hover {
+            border-color: var(--accent-amber);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-4px);
+        }
+        .card h3 {
+            margin: 8px 0 4px 0;
+            color: var(--text-bright);
+            font-size: var(--text-md);
+            font-weight: 700;
+        }
+        .card p {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin: 0;
+            line-height: 1.4;
+        }
+        .icon {
+            font-size: var(--text-xl);
+            margin-bottom: 8px;
+            color: var(--accent-amber);
+        }
+
+        .modal-content {
+            max-width: 420px;
+            text-align: center;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            font-size: var(--text-lg);
+            color: var(--accent-amber);
+        }
+        .modal-content p {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+        }
+
+        .calendar-modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 18px 14px;
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 680px;
+            box-shadow: var(--shadow-lg);
+            text-align: left;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .picker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: var(--text-md);
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-bright);
+        }
+        .picker-nav-btn {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: var(--text-xs);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            transition: all var(--fast);
+        }
+        .picker-nav-btn:hover {
+            background: var(--border);
+            color: var(--text-bright);
+        }
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .day-header-cell {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .day-cell {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 6px 2px;
+            cursor: pointer;
+            transition: all var(--fast) ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+        }
+        .day-cell span {
+            font-size: var(--text-xs);
+            font-weight: 700;
+            color: var(--text-bright);
+        }
+        .day-cell:hover {
+            border-color: var(--accent-amber);
+            background: var(--accent-amber-glow);
+        }
+        .day-cell.selected {
+            background: var(--accent-amber);
+            border-color: var(--accent-amber);
+            color: var(--on-fill);
+        }
+        .day-cell.selected span {
+            color: #ffffff;
+        }
+        .day-cell.has-bookings {
+            border-color: color-mix(in srgb, var(--success) 50%, transparent);
+            background: color-mix(in srgb, var(--success) 8%, transparent);
+        }
+        .day-cell.disabled {
+            background: var(--bg-light);
+            border-color: var(--border);
+            cursor: not-allowed;
+            opacity: 0.4;
+        }
+        .day-cell.disabled span {
+            color: var(--text-muted);
+        }
+
+        .time-slots-table-container {
+            margin-top: 10px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+        }
+        .time-slots-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .time-slot-card {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            font-size: var(--text-xs);
+        }
+        .slot-time-text {
+            font-weight: 700;
+            color: var(--text-bright);
+            margin-bottom: 2px;
+            font-size: var(--text-xs);
+        }
+        .slot-status-available { color: var(--accent-green); font-weight: 600; font-size: var(--text-xs); }
+        .slot-status-occupied { color: var(--accent-red); font-weight: 600; font-size: var(--text-xs); }
+        .slot-status-disabled { color: var(--text-muted); font-weight: 600; font-style: italic; font-size: var(--text-xs); }
+
+        .social-links {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .social-btn {
+            background: var(--bg-light);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            font-size: var(--text-xs);
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all var(--fast) ease;
+        }
+        .social-btn:hover {
+            border-color: var(--accent-amber);
+            background: var(--accent-amber-glow);
+            color: var(--accent-amber);
+        }
+
+        @media (max-width: 900px) {
+            .card {
+                flex-basis: calc(50% - 16px);
+                max-width: calc(50% - 16px);
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px 12px;
+            }
+
+            .main-container h2 {
+                font-size: var(--text-lg);
+            }
+
+            .main-container > p {
+                font-size: var(--text-xs);
+                margin-bottom: 18px;
+            }
+
+            .cards-grid {
+                gap: 12px !important;
+                padding: 0 4px;
+            }
+
+            .card {
+                flex-basis: 100%;
+                max-width: none;
+                padding: 16px 12px;
+                flex-direction: row;
+                text-align: left;
+                gap: 14px;
+                align-items: center;
+            }
+
+            .card .icon {
+                font-size: var(--text-xl);
+                margin-bottom: 0;
+                flex-shrink: 0;
+            }
+
+            .card-content-wrap {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .card h3 {
+                margin: 0 0 2px 0;
+                font-size: var(--text-md);
+            }
+
+            .card p {
+                font-size: var(--text-xs);
+            }
+
+            .time-slots-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .calendar-modal-content {
+                padding: 14px 10px;
+            }
+        }
+{% endblock %}
+
+{% block content %}
+            {% set role = session.get('role') %}
+            {% set first_name = (session.get('fullname') or session.get('user') or '').split(' ')[0] %}
+            <h2>Welcome back{{ ', ' ~ first_name if first_name }}</h2>
+            {% if role == 'admin' %}
+            <p>Today at the shop. Everything else is in the menu.</p>
+            {% elif role == 'staff' %}
+            <p>Today at the shop. Your cars are on the Queue page.</p>
+            {% else %}
+            <p>Book a wash, follow the queue, and check how busy we are.</p>
+            <a href="/book" class="btn-primary home-cta"><i class="fa-solid fa-calendar-plus"></i> Book a Service</a>
+            {% endif %}
+
+            <!-- Today's numbers (admin/staff) - /api/admin/metrics. -->
+            {% if role in ['admin', 'staff'] %}
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>In Queue Now</h4>
+                    <p class="value" id="home-queue-count">--</p>
+                    <p class="stat-sub" id="home-upcoming-count"></p>
+                </div>
+                <div class="stat-card completed">
+                    <h4>Completed Today</h4>
+                    <p class="value" id="home-completed-today">--</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Avg Queue Wait Today</h4>
+                    <p class="value" id="home-avg-wait-today">--</p>
+                </div>
+                <div class="stat-card staffed">
+                    <h4>Active Staff</h4>
+                    <p class="value" id="home-active-staff">--</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Only what the menu doesn't already have: the availability
+                 calendar, and for customers, how to reach the shop. -->
+            <div class="cards-grid">
+                <div onclick="openCalendar()" class="card" role="button" tabindex="0">
+                    <div class="icon"><i class="fa-solid fa-calendar-days"></i></div>
+                    <div class="card-content-wrap">
+                        <h3>Availability</h3>
+                        <p>See how many bays are free at each time, any day.</p>
+                    </div>
+                </div>
+                {% if role not in ['admin', 'staff'] %}
+                <div onclick="openModal('contactModal')" class="card" role="button" tabindex="0">
+                    <div class="icon"><i class="fa-solid fa-phone"></i></div>
+                    <div class="card-content-wrap">
+                        <h3>Contact Us</h3>
+                        <p>Get in touch with us for any inquiries.</p>
+                    </div>
+                </div>
+                <a href="https://www.google.com/maps/search/?api=1&query=MD57%20Car%20Wash%20%26%20Auto%20Detailing%2C%207th%20Avenue%20D.%20Aquino%20St.%20West%20Grace%20Park%20Caloocan" target="_blank" rel="noopener noreferrer" class="card">
+                    <div class="icon"><i class="fa-solid fa-location-dot"></i></div>
+                    <div class="card-content-wrap">
+                        <h3>Location</h3>
+                        <p>Find our shop and get directions.</p>
+                    </div>
+                </a>
+                {% endif %}
+            </div>
+{% endblock %}
+
+{% block modals %}
+    <!-- LOGOUT ANIMATION MODAL OVERLAY -->
+    <div id="logoutAnimationModal">
+        <div class="logout-animation-card">
+            <div class="logout-icon-animated"><i class="fa-solid fa-car"></i> <i class="fa-solid fa-house"></i></div>
+            <h3>Signing Out...</h3>
+            <p>Thank you for choosing our Car Wash. God Bless You!!</p>
+        </div>
+    </div>
+
+    <!-- Floating Modal: Future Calendar Schedule Viewer -->
+    <div id="calendarModal" class="modal-overlay">
+        <div class="calendar-modal-content">
+            <span class="close-btn" onclick="closeModal('calendarModal')">&times;</span>
+            <div class="picker-header">
+                <button type="button" class="picker-nav-btn" onclick="changeHomeCalendarMonth(-1)">&#10094; Prev</button>
+                <span id="home-picker-month-year" style="color: var(--accent-amber); font-size: var(--text-md);">September 2026</span>
+                <button type="button" class="picker-nav-btn" onclick="changeHomeCalendarMonth(1)">Next &#10095;</button>
+            </div>
+
+            <div class="days-grid">
+                <div class="day-header-cell">Sun</div>
+                <div class="day-header-cell">Mon</div>
+                <div class="day-header-cell">Tue</div>
+                <div class="day-header-cell">Wed</div>
+                <div class="day-header-cell">Thu</div>
+                <div class="day-header-cell">Fri</div>
+                <div class="day-header-cell">Sat</div>
+            </div>
+
+            <div class="days-grid" id="home-calendar-days-container"></div>
+
+            <div class="time-slots-table-container">
+                <div style="font-size: var(--text-xs); font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">
+                    Time Slots for <span id="selected-date-label" style="color: var(--accent-amber);">Select a date</span>:
+                </div>
+
+                <div class="time-slots-grid" id="home-time-slots-preview">
+                    <div style="grid-column: span 4; text-align: center; color: var(--text-muted); font-size: var(--text-xs); padding: 12px;">Click an available date above to view all time slots.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Modal: Contacts -->
+    <div id="contactModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('contactModal')">&times;</span>
+            <h3><i class="fa-solid fa-phone" style="color: var(--accent-amber);"></i> Contacts</h3>
+            <p><strong>MD57 Car Wash Support</strong></p>
+            <p>Phone: 0966 150 2959</p>
+            <p>Email: md57carwash@gmail.com</p>
+
+            <div class="social-links">
+                <a href="https://www.instagram.com/md57carwash?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" target="_blank" class="social-btn">Instagram</a>
+                <a href="https://www.tiktok.com/@md57carwash?is_from_webapp=1&sender_device=pc" target="_blank" class="social-btn">TikTok</a>
+                <a href="https://facebook.com/MD57CarwashAndAutoDetailing" target="_blank" class="social-btn">Facebook</a>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    let homeCalendarView = new Date();
+    let activeSelectedDateStr = "";
+
+    // Today's numbers (admin/staff only) - see common.js's loadKpiStrip.
+    document.addEventListener('DOMContentLoaded', () => {
+        if (CURRENT_USER.role !== 'admin' && CURRENT_USER.role !== 'staff') return;
+        loadKpiStrip().catch(err => console.error('Failed to load KPI strip:', err));
+        onLiveUpdate(() => loadKpiStrip().catch(() => {}));
+    });
+    // Cards that open a pop-up work from the keyboard too.
+    document.querySelectorAll('.cards-grid .card[role="button"]').forEach(card =>
+        card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } }));
+
+    // The availability calendar opens on today.
+    function openCalendar() {
+        const today = new Date();
+        activeSelectedDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        openModal('calendarModal');
+        renderHomeCalendar();
+        loadTimeSlotsForDate(today.getFullYear(), today.getMonth(), today.getDate());
+    }
+
+    // /api/bay-availability: the days with bookings, and per start time how
+    // many bays are free (scheduling.py - each bay one car at a time).
+    async function fetchBayAvailability(dateStr) {
+        try {
+            const res = await fetch(dateStr ? `/api/bay-availability?date=${encodeURIComponent(dateStr)}` : '/api/bay-availability');
+            const data = await res.json();
+            return data.status === 'success' ? data : { booked_dates: [], times: [] };
+        } catch (e) {
+            console.error('Failed to load bay availability:', e);
+            return { booked_dates: [], times: [] };
+        }
+    }
+
+    async function renderHomeCalendar() {
+        const year = homeCalendarView.getFullYear();
+        const month = homeCalendarView.getMonth();
+
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        document.getElementById('home-picker-month-year').innerText = `${monthNames[month]} ${year}`;
+
+        const firstDayIndex = new Date(year, month, 1).getDay();
+        const totalDays = new Date(year, month + 1, 0).getDate();
+
+        let daysContainer = document.getElementById('home-calendar-days-container');
+        daysContainer.innerHTML = '';
+
+        for (let i = 0; i < firstDayIndex; i++) {
+            let emptyCell = document.createElement('div');
+            daysContainer.appendChild(emptyCell);
+        }
+
+        // Real booking data from the server (only active reservations are
+        // returned, so no client-side status filtering is needed here).
+        const bookedDates = new Set((await fetchBayAvailability()).booked_dates);
+
+        const todayObj = new Date();
+        const currentYear = todayObj.getFullYear();
+        const currentMonth = todayObj.getMonth();
+        const currentDay = todayObj.getDate();
+
+        for (let day = 1; day <= totalDays; day++) {
+            let dayCell = document.createElement('div');
+            dayCell.className = 'day-cell';
+
+            let formattedMonth = String(month + 1).padStart(2, '0');
+            let formattedDay = String(day).padStart(2, '0');
+            let dateStringFull = `${year}-${formattedMonth}-${formattedDay}`;
+
+            let cellDate = new Date(year, month, day);
+            let todayDateOnly = new Date(currentYear, currentMonth, currentDay);
+            let isPastDate = cellDate < todayDateOnly;
+
+            if (isPastDate) {
+                dayCell.classList.add('disabled');
+            } else {
+                if (bookedDates.has(dateStringFull)) {
+                    dayCell.classList.add('has-bookings');
+                }
+
+                dayCell.onclick = () => selectHomeCalendarDate(year, month, day, dayCell);
+            }
+
+            dayCell.innerHTML = `<span>${day}</span>`;
+
+            if (dateStringFull === activeSelectedDateStr) {
+                dayCell.classList.add('selected');
+            }
+
+            daysContainer.appendChild(dayCell);
+        }
+    }
+
+    function changeHomeCalendarMonth(direction) {
+        homeCalendarView.setMonth(homeCalendarView.getMonth() + direction);
+        renderHomeCalendar();
+    }
+
+    function selectHomeCalendarDate(year, month, day, element) {
+        let formattedMonth = String(month + 1).padStart(2, '0');
+        let formattedDay = String(day).padStart(2, '0');
+        activeSelectedDateStr = `${year}-${formattedMonth}-${formattedDay}`;
+
+        document.querySelectorAll('#home-calendar-days-container .day-cell').forEach(cell => cell.classList.remove('selected'));
+        if (element) {
+            element.classList.add('selected');
+        }
+
+        loadTimeSlotsForDate(year, month, day);
+    }
+
+    async function loadTimeSlotsForDate(year, month, day) {
+        document.getElementById('selected-date-label').innerText = activeSelectedDateStr;
+
+        const slotsContainer = document.getElementById('home-time-slots-preview');
+        slotsContainer.innerHTML = '';
+
+        const data = await fetchBayAvailability(activeSelectedDateStr);
+        (data.times || []).forEach(slot => {
+            const slotCard = document.createElement('div');
+            slotCard.className = 'time-slot-card';
+            let status;
+            if (slot.past) status = '<span class="slot-status-disabled">Passed</span>';
+            else if (!slot.free_bays) status = '<span class="slot-status-occupied">Full</span>';
+            else status = `<span class="slot-status-available">${slot.free_bays} of ${data.bays} bays free</span>`;
+            slotCard.innerHTML = `<span class="slot-time-text">${slot.time}</span>${status}`;
+            slotsContainer.appendChild(slotCard);
+        });
+    }
+
+</script>
+{% endblock %}

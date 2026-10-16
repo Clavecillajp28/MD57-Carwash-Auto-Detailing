@@ -1,0 +1,764 @@
+{% extends "base.html" %}
+{% block page_comment %}Ready Vehicles{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Ready Vehicles Dashboard{% endblock %}
+
+{% block extra_style %}
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 25px 16px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .page-title-container {
+            margin-bottom: 20px;
+        }
+        .page-title-container h2 {
+            font-size: var(--text-xl);
+            margin: 0 0 4px 0;
+            color: var(--text-bright);
+            line-height: 1.3;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .page-subtitle {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin: 0;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        .filter-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: 2fr 2fr auto;
+            gap: 12px;
+            align-items: flex-end;
+            box-shadow: var(--shadow-md);
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+        }
+        .filter-group label {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .filter-group input {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-bright);
+            padding: 8px 10px;
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            outline: none;
+            transition: all var(--fast) ease;
+            width: 100%;
+        }
+        .filter-group input:focus {
+            border-color: var(--accent-amber);
+            background: var(--card-bg);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 10%, transparent);
+        }
+        .btn-reset {
+            height: 35px;
+        }
+
+        .bays-grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(280px, 1fr));
+            gap: 16px;
+            align-items: start;
+        }
+
+        .card {
+            border-top: 1px solid var(--edge);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            /* Grid items default to min-width:auto, which refuses to shrink
+               below a queue-item-card row's longest unbroken line - on a
+               phone-width single column that pushed the card (and the
+               page) wider than the viewport instead of letting that text
+               ellipsis-truncate. */
+            min-width: 0;
+        }
+        .card.bay-2 { border-top-color: var(--info); }
+        .card.bay-3 { border-top-color: var(--accent-green); }
+
+        .badge-ready {
+            background-color: color-mix(in srgb, var(--success) 10%, transparent);
+            color: var(--accent-green);
+            border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+        .pagination-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .modal-content {
+            max-width: 420px;
+            text-align: left;
+        }
+
+        .modal-header h3 { margin: 0; color: var(--accent-amber); font-size: var(--text-md); font-weight: 700; }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+        }
+
+        .modal-body .form-group {
+            margin-bottom: 12px;
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+        .modal-body input, .modal-body textarea {
+            width: 100%;
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: var(--radius-md);
+            color: var(--text-bright);
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: var(--text-xs);
+            outline: none;
+            transition: all var(--fast) ease;
+        }
+        .modal-body textarea {
+            resize: vertical;
+            height: 80px;
+        }
+        .modal-body input:focus, .modal-body textarea:focus {
+            border-color: var(--accent-amber);
+            background: var(--card-bg);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 10%, transparent);
+        }
+
+        /* Deliberately different from the shared header/action-bar buttons -
+           these are full-width modal buttons, not header controls. */
+        .btn-primary {
+            width: 100%;
+        }
+
+        .btn-secondary {
+            width: 100%;
+        }
+
+        @media (max-width: 900px) {
+            .bays-grid-container {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px 12px;
+            }
+
+            .page-title-container h2 {
+                font-size: var(--text-lg);
+            }
+
+            .page-subtitle {
+                font-size: var(--text-xs);
+            }
+
+            .filter-container {
+                grid-template-columns: 1fr !important;
+                padding: 12px;
+            }
+        }
+{% endblock %}
+
+{% block content %}
+            <div class="page-title-container">
+                <h2><i class="fa-solid fa-circle-check"></i> Ready for Pickup</h2>
+                <p class="page-subtitle">Notify customers when their wash is finished. Confirm pickup once they collect their vehicle.</p>
+            </div>
+
+            <div class="filter-container">
+                <div class="filter-group">
+                    <label for="search-input">Search Plate / Name / Service:</label>
+                    <input type="text" id="search-input" placeholder="e.g. ABC-1234 or John..." oninput="applyFilters()">
+                </div>
+
+                <div class="filter-group">
+                    <label for="filter-date">Select Date:</label>
+                    <input type="date" id="filter-date" onchange="applyFilters()">
+                </div>
+
+                <button type="button" class="btn-reset" onclick="resetFilters()">Reset All</button>
+            </div>
+
+            <div class="bays-grid-container">
+
+                <div class="card">
+                    <div>
+                        <h3 style="margin: 0 0 10px 0; color: var(--text-bright); font-size: var(--text-md); font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--accent-amber); padding: 2px 6px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-1">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-1" data-skeleton="cards:2"></div>
+                    </div>
+                    <div class="pagination-container" id="pagination-bay-1">
+                        <span id="page-info-bay-1">1 / 1</span>
+                        <div class="pagination-btns">
+                            <button class="page-btn" id="prev-btn-bay-1" onclick="changePage('Bay #1', (bayPages['Bay #1'] || 1) - 1)">&lt;</button>
+                            <button class="page-btn" id="next-btn-bay-1" onclick="changePage('Bay #1', (bayPages['Bay #1'] || 1) + 1)">&gt;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bay-2">
+                    <div>
+                        <h3 style="margin: 0 0 10px 0; color: var(--text-bright); font-size: var(--text-md); font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); padding: 2px 6px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-2">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-2" data-skeleton="cards:2"></div>
+                    </div>
+                    <div class="pagination-container" id="pagination-bay-2">
+                        <span id="page-info-bay-2">1 / 1</span>
+                        <div class="pagination-btns">
+                            <button class="page-btn" id="prev-btn-bay-2" onclick="changePage('Bay #2', (bayPages['Bay #2'] || 1) - 1)">&lt;</button>
+                            <button class="page-btn" id="next-btn-bay-2" onclick="changePage('Bay #2', (bayPages['Bay #2'] || 1) + 1)">&gt;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bay-3">
+                    <div>
+                        <h3 style="margin: 0 0 10px 0; color: var(--text-bright); font-size: var(--text-md); font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--accent-green); padding: 2px 6px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-3">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-3" data-skeleton="cards:2"></div>
+                    </div>
+                    <div class="pagination-container" id="pagination-bay-3">
+                        <span id="page-info-bay-3">1 / 1</span>
+                        <div class="pagination-btns">
+                            <button class="page-btn" id="prev-btn-bay-3" onclick="changePage('Bay #3', (bayPages['Bay #3'] || 1) - 1)">&lt;</button>
+                            <button class="page-btn" id="next-btn-bay-3" onclick="changePage('Bay #3', (bayPages['Bay #3'] || 1) + 1)">&gt;</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+{% endblock %}
+
+{% block modals %}
+    <!-- NOTIFICATION MODAL -->
+    <div class="modal-overlay" id="notifyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-paper-plane"></i> Notify Customer</h3>
+                <button class="close-btn" id="notifyCloseBtn" onclick="closeNotifyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="notifyForm" onsubmit="submitNotification(event)">
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-user"></i> Customer Name</label>
+                        <input type="text" id="modalCustomerName" readonly>
+                    </div>
+                    <div id="modalEmailFields">
+                        <div class="form-group">
+                        <label><i class="fa-solid fa-envelope"></i> Recipient Email</label>
+                            <input type="email" id="modalCustomerEmail" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-heading"></i> Email Subject</label>
+                            <input type="text" id="modalSubject" value="Your Car Wash Service is Complete - MD57">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-align-left"></i> Message Content</label>
+                            <textarea id="modalMessage" oninput="updateNotifyMessageCount()"></textarea>
+                            <div id="modalMessageCount" style="text-align: right; font-size: var(--text-xs); color: var(--text-muted); margin-top: 3px;"></div>
+                        </div>
+                    </div>
+                    <div id="notifySendError" style="display: none; margin-top: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); color: var(--accent-red); font-size: var(--text-xs); font-weight: 600;"></div>
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+                        <button type="submit" class="btn-primary" id="notifySendBtn">
+                            <i class="fa-solid fa-paper-plane"></i> <span id="notifySendBtnLabel">Send Notification</span>
+                        </button>
+                        <button type="button" class="btn-secondary" id="notifyCancelBtn" onclick="closeNotifyModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalPlateTitle">Vehicle Details</h3>
+                <button class="close-btn" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px;">
+                    <div class="detail-row"><span class="detail-label">Customer Name:</span><span class="detail-value" id="detCustomer">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Email Address:</span><span class="detail-value" id="detEmail">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Vehicle & Type:</span><span class="detail-value" id="detVehicle">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Service Type:</span><span class="detail-value" id="detService">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Schedule:</span><span class="detail-value" id="detSchedule" style="color: var(--accent-amber);">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Assigned Bay:</span><span class="detail-value" id="detBay">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Washed By:</span><span class="detail-value" id="detWasher" style="color: var(--accent-green);">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Status:</span><span class="detail-value" style="color: var(--accent-green);">Awaiting Pickup</span></div>
+                    <div class="detail-row"><span class="detail-label">Completed At:</span><span class="detail-value" id="detCompletedAt">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Ready Email Sent:</span><span class="detail-value" id="detNotifiedAt">-</span></div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button type="button" class="btn-secondary" onclick="closeDetailModal()">Close</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+
+
+    // Pagination state per bay (5 items per page)
+    let bayPages = {
+        "Bay #1": 1,
+        "Bay #2": 1,
+        "Bay #3": 1
+    };
+    const itemsPerPage = 5;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById('filter-date').value = '';
+        fetchAllData();
+        onLiveUpdate(fetchAllData);
+    });
+
+    let allReadyVehicles = [];
+
+    // The booking a notification pointed at (?booking=<id>), opened once
+    // the list has loaded.
+    let focusBookingId = takeFocusBookingId();
+
+    // The Ready list from the server (/api/get-ready).
+    function fetchAllData() {
+        fetch('/api/get-ready')
+            .then(res => res.json())
+            .then(data => {
+                const apiData = (data.status === 'success' && Array.isArray(data.data)) ? data.data : [];
+                allReadyVehicles = apiData.map(car => ({
+                    ...car,
+                    customer_name: car.customer_name || (car.email ? car.email.split('@')[0] : 'Online Customer'),
+                    completed_ms: parseServerDateTime(car.completed_at),
+                }));
+                // Finished longest ago first; a missing/unparseable time sorts last.
+                allReadyVehicles.sort((a, b) => (a.completed_ms ?? Infinity) - (b.completed_ms ?? Infinity));
+
+                // Re-renders with the refreshed data but keeps whatever
+                // page each bay is on - this runs on every live update (see
+                // onLiveUpdate above), and calling applyFilters() here
+                // would snap every bay back to page 1 on each update.
+                renderCategorizedBays(getFilteredReadyVehicles());
+
+                if (focusBookingId) {
+                    const reservationId = focusBookingId;
+                    focusBookingId = null;
+                    if (findReadyVehicle(reservationId)) {
+                        openDetailModal(reservationId);
+                    } else {
+                        showToast("Not on the Ready List", `Booking MD57-${reservationId} is no longer waiting for pickup.`, "error");
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Failed to load ready list from server:", err);
+            });
+    }
+
+    function getFilteredReadyVehicles() {
+        const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+        const selectedDate = document.getElementById('filter-date').value;
+
+        return allReadyVehicles.filter(item => {
+            let matchesDate = true;
+            if (selectedDate) {
+                let itemDate = item.completed_at || "";
+                let cleanItemDate = itemDate.split('T')[0].split(' ')[0];
+                matchesDate = !cleanItemDate || (cleanItemDate === selectedDate);
+            }
+
+            let name = item.customer_name.toLowerCase();
+            let plate = (item.plate_number || "").toLowerCase();
+            let service = (item.service_type || "").toLowerCase();
+
+            let matchesSearch = name.includes(searchQuery) || plate.includes(searchQuery) || service.includes(searchQuery);
+
+            return matchesDate && matchesSearch;
+        });
+    }
+
+    // Called whenever the search/date filter actually changes - a new
+    // filter result invalidates whatever page you were on (page 3 of the
+    // old results may not even exist in the new, smaller set), so this is
+    // the only place bay page numbers get reset back to 1.
+    function applyFilters() {
+        Object.keys(bayPages).forEach(k => bayPages[k] = 1);
+        renderCategorizedBays(getFilteredReadyVehicles());
+    }
+
+    function resetFilters() {
+        document.getElementById('search-input').value = '';
+        document.getElementById('filter-date').value = '';
+        applyFilters();
+    }
+
+    // Re-renders with the CURRENT filters but does not touch bayPages
+    // beyond the one bay being paged - reusing applyFilters() here would
+    // reset every bay's page back to 1 on every click.
+    function changePage(bayKey, pageNum) {
+        bayPages[bayKey] = pageNum;
+        renderCategorizedBays(getFilteredReadyVehicles());
+    }
+
+    function renderCategorizedBays(items) {
+        let bays = {
+            "Bay #1": document.getElementById('list-bay-1'),
+            "Bay #2": document.getElementById('list-bay-2'),
+            "Bay #3": document.getElementById('list-bay-3')
+        };
+
+        let paginationContainers = {
+            "Bay #1": document.getElementById('pagination-bay-1'),
+            "Bay #2": document.getElementById('pagination-bay-2'),
+            "Bay #3": document.getElementById('pagination-bay-3')
+        };
+
+        let counts = { "Bay #1": 0, "Bay #2": 0, "Bay #3": 0 };
+
+        Object.keys(bays).forEach(bayKey => {
+            if (bays[bayKey]) bays[bayKey].innerHTML = '';
+        });
+
+        let bayBuckets = { "Bay #1": [], "Bay #2": [], "Bay #3": [] };
+
+        items.forEach(item => {
+            item.assigned_bay = getNormalizedBayKey(item);
+            bayBuckets[item.assigned_bay].push(item);
+        });
+
+        // Notifying the customer and archiving to History is an admin-only
+        // action now - staff wash the car and mark it complete, but admin
+        // is the one who tells the customer and closes the job out.
+        let isAdmin = (CURRENT_USER.role === 'admin');
+
+        Object.keys(bayBuckets).forEach(bayKey => {
+            let list = bayBuckets[bayKey];
+            counts[bayKey] = list.length;
+            let container = bays[bayKey];
+            let paginationContainer = paginationContainers[bayKey];
+            let bayIdSlug = bayKey.toLowerCase().replace('#', '').replace(/\s+/g, '-');
+            let pageInfoEl = document.getElementById(`page-info-${bayIdSlug}`);
+            let prevBtn = document.getElementById(`prev-btn-${bayIdSlug}`);
+            let nextBtn = document.getElementById(`next-btn-${bayIdSlug}`);
+
+            if (!container) return;
+
+            if (list.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 15px; font-size: var(--text-xs);">No vehicles ready in ${bayKey}</div>`;
+                if (paginationContainer) paginationContainer.style.display = 'none';
+                if (pageInfoEl) pageInfoEl.innerText = '1 / 1';
+                if (prevBtn) prevBtn.disabled = true;
+                if (nextBtn) nextBtn.disabled = true;
+            } else {
+                if (paginationContainer) paginationContainer.style.display = 'flex';
+
+                let currentPage = bayPages[bayKey] || 1;
+                let totalPages = Math.ceil(list.length / itemsPerPage);
+                if (currentPage > totalPages) currentPage = totalPages;
+                bayPages[bayKey] = currentPage;
+
+                let startIndex = (currentPage - 1) * itemsPerPage;
+                let paginatedItems = list.slice(startIndex, startIndex + itemsPerPage);
+
+                paginatedItems.forEach((item, index) => {
+                    let absoluteIndex = startIndex + index;
+                    let dateDisplay = formatTimestamp(item.completed_at);
+                    const sourceDisplay = item.booking_source === 'Admin Booking' ? 'Management booking' : item.booking_source;
+
+                    let plate = item.plate_number;
+
+                    let actionButtonsHtml = '';
+                    if (isAdmin) {
+                        actionButtonsHtml = `
+                            <div class="action-btns">
+                                <button class="btn-notify" onclick="event.stopPropagation(); openNotifyModal(${Number(item.id)})">Notify</button>
+                                <button class="btn-clear" onclick="event.stopPropagation(); confirmPickup(${Number(item.id)}, this)">Confirm Pickup</button>
+                            </div>
+                        `;
+                    }
+
+                    let washerLine = item.washer
+                        ? `<div style="font-size: var(--text-xs); color: var(--accent-green); margin-top: 2px; font-weight: 700;"><i class="fa-solid fa-user-gear"></i> Washed by: ${escapeHtml(item.washer)}</div>`
+                        : `<div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;"><i class="fa-solid fa-user-gear"></i> Washer: Not recorded</div>`;
+
+                    container.innerHTML += `
+                        <div class="queue-item-card" data-reservation-id="${Number(item.id)}" onclick="openDetailModal(${Number(item.id)})">
+                            <div class="queue-item-info">
+                                <div class="queue-item-title">
+                                    <span>#${absoluteIndex + 1} • ${escapeHtml(plate)}</span>
+                                    <span class="badge-ready">Ready</span>
+                                </div>
+                                <div class="queue-item-details">
+                                    <i class="fa-solid fa-user"></i> ${escapeHtml(sourceDisplay)} &bull; <i class="fa-solid fa-car"></i> ${escapeHtml(item.service_type)}
+                                </div>
+                                ${washerLine}
+                                <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;">
+                                    Completed: ${escapeHtml(dateDisplay)}
+                                </div>
+                                <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;">
+                                    ${item.ready_notified_at ? `Email sent: ${escapeHtml(formatTimestamp(item.ready_notified_at))}` : 'Ready email not sent'}
+                                </div>
+                            </div>
+                            <div class="queue-item-meta">
+                                ${actionButtonsHtml}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (pageInfoEl) pageInfoEl.innerText = `${currentPage} / ${totalPages}`;
+                if (prevBtn) prevBtn.disabled = (currentPage === 1);
+                if (nextBtn) nextBtn.disabled = (currentPage === totalPages);
+            }
+
+            let countElement = document.getElementById(`count-${bayIdSlug}`);
+            if (countElement) {
+                countElement.innerText = `${counts[bayKey]} Vehicles`;
+            }
+        });
+    }
+
+    // Bookings are identified by reservation id everywhere on this page -
+    // two bookings can share a plate.
+    function findReadyVehicle(reservationId) {
+        return allReadyVehicles.find(car => Number(car.id) === Number(reservationId));
+    }
+
+    function openDetailModal(reservationId) {
+        let item = findReadyVehicle(reservationId);
+
+        if (!item) {
+            showToast("Error", "Vehicle details not found.", "error");
+            return;
+        }
+        const plateNumber = item.plate_number;
+
+        document.getElementById('modalPlateTitle').innerText = `Vehicle: ${plateNumber}`;
+        document.getElementById('detCustomer').innerText = item.customer_name;
+        document.getElementById('detEmail').innerText = item.email || 'No email provided';
+        document.getElementById('detVehicle').innerText = describeVehicle(item);
+        document.getElementById('detService').innerText = item.service_type || 'Service';
+        document.getElementById('detSchedule').innerText = item.booking_date && item.booking_time ? formatBookingWhen(item.booking_date, item.booking_time) : 'Walk-in / Immediate';
+        document.getElementById('detBay').innerText = item.assigned_bay || 'Bay #1';
+        document.getElementById('detWasher').innerText = item.washer || 'Not recorded';
+        document.getElementById('detCompletedAt').innerText = formatTimestamp(item.completed_at);
+        document.getElementById('detNotifiedAt').innerText = item.ready_notified_at
+            ? formatTimestamp(item.ready_notified_at) : 'Not sent';
+
+        openModal('detailModal');
+    }
+
+    function closeDetailModal() {
+        closeModal('detailModal');
+    }
+
+    // The booking the Notify window is open for.
+    let notifyReservationId = null;
+
+    function openNotifyModal(reservationId) {
+        if (CURRENT_USER.role !== 'admin') {
+            showToast('Access Denied', 'Only admin can notify customers that their vehicle is ready.', 'error');
+            return;
+        }
+
+        let item = findReadyVehicle(reservationId);
+        if (!item) {
+            showToast("Error", "Vehicle details not found.", "error");
+            return;
+        }
+        const plateNumber = item.plate_number;
+        notifyReservationId = item.id;
+
+        let customerName = item.customer_name;
+        let email = item.email;
+
+        if (!email) {
+            showToast("No Email", "No email is recorded. You can still confirm pickup when the customer collects the vehicle.", "error");
+            return;
+        }
+
+        document.getElementById('modalCustomerName').value = customerName;
+        document.getElementById('modalCustomerEmail').value = email;
+        document.getElementById('modalSubject').value = `MD57 Car Wash Alert: Your vehicle (${plateNumber}) is ready!`;
+        document.getElementById('modalMessage').value = `Hello ${customerName},\n\nGood day! The service for your vehicle with plate number ${plateNumber} is now complete.\n\nYou may now claim your vehicle at MD57 Car Wash.\n\nThank you very much!`;
+        updateNotifyMessageCount();
+
+        setNotifySending(false);
+        hideNotifyError();
+
+        openModal('notifyModal');
+    }
+
+    function closeNotifyModal() {
+        closeModal('notifyModal');
+    }
+
+    function updateNotifyMessageCount() {
+        let field = document.getElementById('modalMessage');
+        let counter = document.getElementById('modalMessageCount');
+        if (field && counter) counter.innerText = `${field.value.length} characters`;
+    }
+
+    function setNotifySending(isSending) {
+        let btn = document.getElementById('notifySendBtn');
+        let label = document.getElementById('notifySendBtnLabel');
+        let icon = btn ? btn.querySelector('i') : null;
+        let cancelBtn = document.getElementById('notifyCancelBtn');
+        let closeBtn = document.getElementById('notifyCloseBtn');
+        if (!btn || !label) return;
+        btn.disabled = isSending;
+        if (cancelBtn) cancelBtn.disabled = isSending;
+        if (closeBtn) closeBtn.style.pointerEvents = isSending ? 'none' : '';
+        label.innerText = isSending ? 'Sending...' : 'Send Notification';
+        if (icon) icon.className = isSending ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-paper-plane';
+    }
+
+    function showNotifyError(message) {
+        let box = document.getElementById('notifySendError');
+        if (!box) return;
+        box.innerText = message;
+        box.style.display = 'block';
+    }
+
+    function hideNotifyError() {
+        let box = document.getElementById('notifySendError');
+        if (box) box.style.display = 'none';
+    }
+
+    function submitNotification(event) {
+        event.preventDefault();
+
+        const subject = document.getElementById('modalSubject').value;
+        const message = document.getElementById('modalMessage').value;
+
+        hideNotifyError();
+        setNotifySending(true);
+
+        const payload = {
+            subject: subject,
+            message: message,
+            reservation_id: notifyReservationId
+        };
+
+        // A sent email leaves the vehicle ready. Physical collection is a
+        // separate, explicit action, including for customers without email.
+        fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status !== 'success') {
+                setNotifySending(false);
+                showNotifyError(data.message || "Could not notify customer. Please retry.");
+                return;
+            }
+            setNotifySending(false);
+            closeNotifyModal();
+            showToast('Notification Sent', data.message);
+            fetchAllData();
+        })
+        .catch(err => {
+            console.error("Ready notification error:", err);
+            setNotifySending(false);
+            showNotifyError("Could not send the notification. Please retry.");
+        });
+    }
+
+    async function confirmPickup(reservationId, button) {
+        if (CURRENT_USER.role !== 'admin') {
+            showToast('Access Denied', 'Only admin can confirm vehicle pickup.', 'error');
+            return;
+        }
+        const item = findReadyVehicle(reservationId);
+        if (!item) return;
+        const plateNumber = item.plate_number;
+
+        if (!(await confirmDialog('Confirm that the customer has collected this vehicle. Pickup time and your name will be recorded in History.',
+            { title: `Confirm pickup of ${plateNumber}?`, confirmText: 'Confirm Pickup' }))) return;
+        if (button) button.disabled = true;
+
+        fetch('/api/confirm-pickup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reservation_id: item.id })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status !== 'success') {
+                showToast("Error", data.message || "Could not confirm pickup.", "error");
+                fetchAllData();
+                return;
+            }
+            allReadyVehicles = allReadyVehicles.filter(car => car.id !== item.id);
+            applyFilters();
+            showToast("Pickup Confirmed", `${plateNumber} moved to History.`, "success");
+        })
+        .catch(err => {
+            showToast("Error", "Connection error while confirming pickup.", "error");
+        })
+        .finally(() => { if (button) button.disabled = false; });
+    }
+
+</script>
+{% endblock %}

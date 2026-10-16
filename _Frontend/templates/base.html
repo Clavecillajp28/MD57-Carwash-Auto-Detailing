@@ -1,0 +1,249 @@
+<!--{% block page_comment %}MD57{% endblock %}-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}MD57 Car Wash{% endblock %}</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/md57logo.jpg') }}">
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        {% block extra_style %}{% endblock %}
+    </style>
+</head>
+<body data-live-updates="{{ 'off' if config.get('LIVE_UPDATES') == False else 'on' }}">
+    <!-- First-load loader (once per browser session - see the MOTION
+         section of core.css). -->
+    <div class="app-loader" aria-hidden="true">
+        <div class="loader-ring"><img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt=""></div>
+        <p>MD57 Car Wash</p>
+    </div>
+
+    <div class="main-layout">
+
+        <header>
+            <div class="header-title-container">
+                <!-- No Menu button on desktop - every destination lives in
+                     the fixed sidebar below instead of a dropdown. Logo +
+                     brand name double as a Home link. -->
+                <a href="/" class="header-logo-link" aria-label="MD57 Home">
+                    <img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt="MD57 Car Wash & Auto Detailing" class="header-logo-img">
+                    <span class="header-brand-text">MD57 Car Wash &amp; Auto Detailing</span>
+                </a>
+            </div>
+            <div class="header-right">
+                {% if session.get('user') %}
+                <!-- Notification bell - every account (customer/staff/admin)
+                     gets its own private feed here regardless of whether
+                     they've also opted into email notifications (see
+                     /api/notifications). Present on every authenticated
+                     page since it lives in base.html, not per-page. -->
+                <div class="notif-bell-wrap">
+                    <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifPanel()" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" title="Notifications">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="notif-badge" id="notifBadge" hidden>0</span>
+                    </button>
+                    <div class="notif-panel" id="notifPanel" role="menu">
+                        <div class="notif-panel-header">
+                            <span><i class="fa-solid fa-bell"></i> Notifications</span>
+                            <button class="notif-mark-all-btn" onclick="markAllNotificationsRead()">Mark all read</button>
+                        </div>
+                        <div class="notif-panel-list" id="notifPanelList" data-skeleton="lines:4">
+                        </div>
+                    </div>
+                </div>
+                <!-- Mobile-only: the sidebar becomes an off-canvas drawer
+                     below 768px (see style.css) instead of staying
+                     pinned/visible, so it needs an explicit trigger there -
+                     hidden on desktop where the sidebar is already always
+                     on screen. -->
+                <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" aria-label="Open menu" aria-expanded="false" aria-controls="primarySidebar">
+                    <i class="fa-solid fa-bars" id="sidebarToggleIcon"></i>
+                </button>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- Dims/blocks the page behind the drawer on mobile and closes it
+             on tap - invisible and inert on desktop, where the sidebar
+             never goes off-canvas in the first place. -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+        <!-- Sidebar: every page, by role. Always visible on desktop; an
+             off-canvas drawer toggled by the header button on narrow
+             screens (see the media query in style.css). -->
+        <nav class="sidebar" id="primarySidebar" aria-label="Primary">
+            {% if session.get('user') %}
+                {% set user_role = session.get('role', 'customer') %}
+                {% set display_name = session.get('fullname', session.get('user', 'User')) %}
+                {% set name_parts = display_name.split() %}
+                {% set initials = (name_parts[0][0] ~ (name_parts[1][0] if name_parts|length > 1 else '')) | upper %}
+                <!-- Who's signed in, moved here from the header's top-right
+                     badge - a name/role identity block belongs beside the
+                     nav it's granting access to, not floating alone in the
+                     header, and this is the standard placement in most
+                     dashboard UIs (avatar + name anchoring the sidebar). -->
+                <a href="/profile" class="sidebar-profile" aria-label="Manage your profile">
+                    <div class="sidebar-avatar {% if user_role == 'admin' %}avatar-admin{% elif user_role == 'staff' %}avatar-staff{% else %}avatar-customer{% endif %}">{{ initials }}</div>
+                    <div class="sidebar-profile-info">
+                        <span class="sidebar-profile-name">{{ display_name }}</span>
+                        <span class="sidebar-profile-role">{% if user_role == 'admin' %}{{ 'Owner' if session.get('is_owner') else 'Manager' }}{% elif user_role == 'staff' %}Staff / Washer{% else %}Customer{% endif %}</span>
+                    </div>
+                </a>
+            {% endif %}
+            {# Staff and admin have enough destinations to need headings;
+               a customer's five links read fine as one list. #}
+            {% set nav_role = session.get('role') %}
+            {% set nav_grouped = nav_role in ['admin', 'staff'] %}
+            <a href="/" class="sidebar-link{% if request.path == '/' %} active{% endif %}">
+                <i class="fa-solid fa-house"></i> <span>Home</span>
+            </a>
+            <a href="/profile" class="sidebar-link{% if request.path == '/profile' %} active{% endif %}">
+                <i class="fa-solid fa-user-shield"></i> <span>My Profile</span>
+            </a>
+
+            {% if nav_grouped %}<div class="sidebar-group-label">Operations</div>{% endif %}
+            <a href="/queue" class="sidebar-link{% if request.path == '/queue' %} active{% endif %}">
+                <i class="fa-solid fa-car"></i> <span>Queue</span>
+            </a>
+            <a href="/book" class="sidebar-link{% if request.path == '/book' %} active{% endif %}">
+                <i class="fa-solid fa-clipboard-list"></i> <span>Book</span>
+            </a>
+            {% if nav_role == 'customer' %}
+            <a href="/my-bookings" class="sidebar-link{% if request.path == '/my-bookings' %} active{% endif %}">
+                <i class="fa-solid fa-calendar-check"></i> <span>My Bookings</span>
+            </a>
+            {% endif %}
+            {% if nav_grouped %}
+            <a href="/ready" class="sidebar-link{% if request.path == '/ready' %} active{% endif %}">
+                <i class="fa-solid fa-bell"></i> <span>Ready</span>
+            </a>
+            <a href="/history" class="sidebar-link{% if request.path == '/history' %} active{% endif %}">
+                <i class="fa-solid fa-clock-rotate-left"></i> <span>History</span>
+            </a>
+            <a href="/cancelled" class="sidebar-link{% if request.path == '/cancelled' %} active{% endif %}">
+                <i class="fa-solid fa-ban"></i> <span>Cancelled</span>
+            </a>
+
+            <div class="sidebar-group-label">Management</div>
+            <a href="/staff" class="sidebar-link{% if request.path == '/staff' %} active{% endif %}">
+                <i class="fa-solid fa-users"></i> <span>Staff</span>
+            </a>
+            {% if nav_role == 'admin' %}
+            <a href="/operations" class="sidebar-link{% if request.path == '/operations' %} active{% endif %}"><i class="fa-solid fa-heart-pulse"></i><span>Operations</span></a>
+            <a href="/analytics" class="sidebar-link{% if request.path == '/analytics' %} active{% endif %}">
+                <i class="fa-solid fa-chart-line"></i> <span>Analytics</span>
+            </a>
+
+            {% if session.get('is_owner') %}
+            <div class="sidebar-group-label">Owner</div>
+            <a href="/account-security" class="sidebar-link{% if request.path == '/account-security' %} active{% endif %}"><i class="fa-solid fa-shield-halved"></i><span>Account Security</span></a>
+            <a href="/admin/create-user-page" class="sidebar-link{% if request.path == '/admin/create-user-page' %} active{% endif %}">
+                <i class="fa-solid fa-users-gear"></i> <span>Accounts</span>
+            </a>
+            <a href="/admin/manage-pricing" class="sidebar-link{% if request.path == '/admin/manage-pricing' %} active{% endif %}">
+                <i class="fa-solid fa-sliders"></i> <span>Manage Pricing</span>
+            </a>
+            {% endif %}
+            {% endif %}
+
+            <div class="sidebar-group-label">More</div>
+            {% endif %}
+            <!-- Pricing - a compact modal (see the global #pricingModal
+                 markup below), not a dedicated page. Available to every
+                 logged-in role: customers checking cost before booking,
+                 staff/admin quoting a walk-in. -->
+            <button type="button" class="sidebar-link" onclick="openPricingModal()" style="background:none; border:none; width:100%; font-family: inherit; cursor:pointer;">
+                <i class="fa-solid fa-tags"></i> <span>Pricing</span>
+            </button>
+            <a href="/feedback" class="sidebar-link{% if request.path == '/feedback' %} active{% endif %}">
+                <i class="fa-solid fa-star"></i> <span>Feedback</span>
+            </a>
+
+            <!-- Session controls (theme + sign out) pinned to the bottom of
+                 the sidebar via margin-top:auto, instead of the header. -->
+            <div class="sidebar-footer">
+                <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <span class="toggle-knob"><i class="fa-solid fa-moon" id="themeToggleIcon"></i></span>
+                    <span class="theme-toggle-label">Dark Mode</span>
+                </button>
+                {% if session.get('user') %}
+                <button class="logout-btn" id="logoutBtn" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> <span>Sign Out</span></button>
+                {% endif %}
+            </div>
+        </nav>
+
+        <!-- Offset for the fixed sidebar lives on this wrapper, not on
+             .main-container itself - most pages set their own
+             `margin: 0 auto` on .main-container to self-center with a
+             max-width, which would silently cancel a margin-left set
+             there instead. Each page's own centering still works exactly
+             as before, just within the narrower space this wrapper leaves
+             after the sidebar. -->
+        <div class="content-with-sidebar">
+            <div class="main-container">
+                {% block content %}{% endblock %}
+            </div>
+
+            <footer>
+                &copy; 2026 MD57 Car Wash & Auto Detailing System. All rights reserved.
+            </footer>
+        </div>
+    </div>
+
+    {% block modals %}{% endblock %}
+
+    <!-- Price list pop-up - the sidebar's "Pricing" on every page, filled
+         from /api/services (common.js's openPricingModal), so a price
+         changed in Manage Pricing shows here at once. -->
+    <div id="pricingModal" class="modal-overlay">
+        <div class="pricing-modal-content">
+            <button class="pricing-modal-close-btn" onclick="closeModal('pricingModal')" aria-label="Close">&times;</button>
+            <h3><i class="fa-solid fa-tags"></i> Service Pricing</h3>
+            <p class="pricing-modal-sub">All prices in Philippine Peso (₱). Ask staff to confirm your vehicle's size category.</p>
+
+            <div class="pricing-tabs">
+                <button type="button" class="pricing-tab-btn active" onclick="switchPricingTab('general', this)">Car Wash &amp; General</button>
+                <button type="button" class="pricing-tab-btn" onclick="switchPricingTab('detailing', this)">Detailing</button>
+                <button type="button" class="pricing-tab-btn" onclick="switchPricingTab('motorcycle', this)">Motorcycle</button>
+            </div>
+
+            <div id="pricingModalBody" data-skeleton="lines:7" data-skeleton-lazy>
+            </div>
+
+            <p class="pricing-modal-footnote">Prices shown are MD57's official published rates and are informational - the final price for your vehicle is confirmed by staff before service begins.</p>
+        </div>
+    </div>
+
+    <div id="floating-toast">
+        <div id="toast-icon" style="font-size: var(--text-lg);"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="toast-content">
+            <h4 id="toast-title">Success!</h4>
+            <p id="toast-message">Service completed.</p>
+        </div>
+    </div>
+
+    <script>
+        // Role and identity come from Flask session, not localStorage.
+        const CURRENT_USER = {
+            user_id:  {{ session.get('user_id', 0) | tojson }},
+            username: {{ session.get('user', '') | tojson }},
+            fullname:  {{ session.get('fullname', session.get('user', '')) | tojson }},
+            role:      {{ session.get('role', 'customer') | tojson }},
+            is_owner: {{ (session.get('is_owner') or False) | tojson }}
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/motion.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/stepper.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+    {% block extra_script %}{% endblock %}
+</body>
+</html>

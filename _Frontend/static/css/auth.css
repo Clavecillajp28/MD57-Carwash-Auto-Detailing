@@ -1,0 +1,303 @@
+/* MD57 sign-in pages: login, register, forgot password, reset password.
+   One stylesheet for all four. Tokens,
+   buttons, fields and pop-ups come from core.css, loaded before this. */
+
+@keyframes smoothFadeIn {
+    0% { opacity: 0; transform: translateY(-20px) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes subtleFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+    /* The logo artwork, washed out by the theme's page colour. */
+    background: linear-gradient(var(--bg-overlay), var(--bg-overlay)),
+                url("../images/md57logo.jpg") no-repeat center center fixed;
+    background-size: cover;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* ---- Top bar ---- */
+.top-navbar {
+    background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
+}
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    text-decoration: none;
+    color: var(--text-strong);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-md);
+}
+.nav-brand img { width: 30px; height: 30px; object-fit: contain; border-radius: var(--radius-sm); flex-shrink: 0; }
+.nav-menu { display: flex; gap: 20px; align-items: center; flex-shrink: 0; }
+.nav-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    transition: color var(--fast) var(--ease);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+.nav-link:hover, .nav-link.active { color: var(--accent); }
+
+.theme-toggle-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 38px;
+    height: 20px;
+    padding: 0;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color var(--fast) var(--ease);
+}
+.theme-toggle-btn:hover { border-color: var(--accent); }
+.theme-toggle-btn .toggle-knob {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--gold-400);
+    color: var(--on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    transition: transform var(--fast) var(--ease);
+    box-shadow: var(--shadow-sm);
+}
+html[data-theme="dark"] .theme-toggle-btn .toggle-knob { transform: translateX(18px); }
+
+/* ---- The card ---- */
+.main-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    width: 100%;
+}
+.login-card {
+    background: var(--surface-raised);
+    padding: 30px 25px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+    animation: smoothFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: var(--enter-delay);  /* waits for the first-load loader */
+}
+.login-logo-container { animation: subtleFloat 5s ease-in-out infinite; margin-bottom: 15px; }
+.login-logo-container img, .login-card > img {
+    width: 85px;
+    height: 85px;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    background: #ffffff;
+    padding: 4px;
+}
+.login-card > img { width: 70px; height: 70px; margin-bottom: 12px; }
+
+h2 { color: var(--text-strong); margin: 0 0 5px 0; font-size: var(--text-xl); }
+p.subtitle {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    margin: 0 0 20px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+/* A full sentence under the heading rather than a tagline. */
+p.subtitle.sentence { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--text-sm); line-height: 1.5; }
+
+.form-group { text-align: left; margin-bottom: 14px; }
+label { display: block; margin-bottom: 6px; }
+input { width: 100%; }
+.login-card button[type="submit"]:not(.link-button) { width: 100%; margin-top: 15px; }
+
+.password-wrapper { position: relative; display: flex; align-items: center; }
+.password-wrapper input { padding-right: 45px; }
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: color var(--fast) var(--ease);
+}
+.toggle-password:hover { color: var(--accent); }
+.toggle-password svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border); }
+
+/* Google's own button: white with their logo, in both themes. */
+.google-btn {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    background: #ffffff;
+    color: #1f2937;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+    box-shadow: var(--shadow-sm);
+}
+.google-btn:hover { box-shadow: var(--shadow-md); }
+.google-btn:active { transform: scale(0.98); }
+
+/* Privacy Policy consent (register step 2) and the note under Google sign-in */
+.consent-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 4px 0 16px;
+    font-size: var(--text-sm);
+    line-height: 1.45;
+    color: var(--text-muted);
+    text-align: left;
+    cursor: pointer;
+    /* a <label>, but a sentence - not the uppercase field-label style */
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+}
+.consent-check input { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+.consent-note { margin: 8px 0 0; font-size: var(--text-xs); color: var(--text-muted); text-align: center; }
+.consent-check a, .consent-note a { color: var(--accent); }
+
+.error, .notice {
+    font-size: var(--text-sm);
+    margin-top: 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius-md);
+    text-align: left;
+    font-weight: 500;
+}
+.error { color: var(--danger); background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); }
+.notice { color: var(--success); background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 30%, transparent); }
+
+.nav-links { margin-top: 18px; display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; font-size: var(--text-sm); }
+.register-link, .nav-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.register-link:hover, .nav-links a:hover { text-decoration: underline; }
+
+/* ---- Emailed code (password reset, registration) ---- */
+.otp-input {
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    letter-spacing: 10px;
+    padding-left: 20px;
+}
+.otp-input::placeholder { letter-spacing: 10px; font-weight: 400; }
+.verify-intro { font-size: var(--text-sm); color: var(--text); line-height: 1.5; margin: 0 0 16px 0; }
+.resend-form { margin-top: 14px; font-size: var(--text-sm); color: var(--text-muted); }
+.link-button {
+    display: inline;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* ---- About / Contact / Location pop-ups ---- */
+.modal-content { max-width: 360px; text-align: center; }
+.modal-content h3 { color: var(--accent); }
+.modal-content p { font-size: var(--text-sm); color: var(--text-muted); margin: 8px 0; line-height: 1.5; }
+.modal-content p strong { color: var(--text-strong); font-size: var(--text-md); }
+.close-btn { position: absolute; top: 10px; right: 14px; }
+.social-links { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.social-btn, .map-link-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    color: var(--text-strong);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.social-btn:hover, .map-link-btn:hover { border-color: var(--accent); color: var(--accent); }
+.map-link-btn { margin-top: 16px; background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+.stepper-nav button { flex: 1; margin-top: 0; }
+.login-card .stepper-nav button[type="submit"]:not(.link-button) { margin-top: 0; }
+
+@media (max-width: 600px) {
+    .top-navbar { padding: 10px 15px; flex-wrap: wrap; row-gap: 8px; }
+    .nav-brand span { display: none; }
+    .nav-menu { gap: 12px; }
+    .login-card { padding: 24px 18px; }
+}

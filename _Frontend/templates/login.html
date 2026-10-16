@@ -1,0 +1,167 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>MD57 Car Wash - Secure Portal Login</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/md57logo.jpg') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+    <!-- First-load loader (once per browser session - see the MOTION
+         section of core.css). -->
+    <div class="app-loader" aria-hidden="true">
+        <div class="loader-ring"><img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt=""></div>
+        <p>MD57 Car Wash</p>
+    </div>
+
+    <nav class="top-navbar">
+        <a href="/login" class="nav-brand">
+            <img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt="MD57 Logo">
+            <span>MD57 Car Wash &amp; Auto Detailing</span>
+        </a>
+        <div class="nav-menu">
+            <a href="/register" class="nav-link active">Sign Up</a>
+            <button onclick="openModal('aboutModal')" class="nav-link">About</button>
+            <button onclick="openModal('contactModal')" class="nav-link">Contact</button>
+            <button onclick="openModal('locationModal')" class="nav-link">Location</button>
+            <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode">
+                <span class="toggle-knob"><i class="fa-solid fa-moon" id="themeToggleIcon"></i></span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="login-card">
+            <div class="login-logo-container">
+                <img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt="MD57 Logo">
+            </div>
+            <h2>MD57 Login</h2>
+            <p class="subtitle">AI-Driven Queue & Management System</p>
+            
+            <form id="loginForm" method="POST" action="/login">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="next" value="{{ request.values.get('next', '') }}"/>
+                <div class="form-group">
+                    <label>Email Address / Username</label>
+                    <input type="text" name="username" id="login_user" placeholder="Enter email or username" required autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+                </div>
+                
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" name="password" id="login_pass" placeholder="Enter password" required autocomplete="current-password">
+                        <button type="button" class="toggle-password" id="togglePassBtn" onclick="togglePasswordVisibility('login_pass', 'loginPassIcon')">
+                            <svg viewBox="0 0 24 24" id="loginPassIcon">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div style="text-align: right; margin-top: 6px;">
+                        <a href="/forgot-password" style="font-size: var(--text-xs); color: var(--text-muted); text-decoration: none; font-weight: 600;">Forgot password?</a>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">Sign In</button>
+            </form>
+
+            <div class="auth-divider">or</div>
+
+            <!-- Google Sign-In Button -->
+            <a href="/auth/google" class="google-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.13 0-5.78-2.11-6.73-4.96H1.18v3.15C3.15 21.32 7.23 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.27 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.6H1.18C.43 8.12 0 9.82 0 12s.43 3.88 1.18 5.4l4.09-3.16z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.23 0 3.15 2.68 1.18 6.6l4.09 3.15c.95-2.85 3.6-4.96 6.73-4.96z"/>
+                </svg>
+                Sign in with Google
+            </a>
+            <p class="consent-note">By continuing with Google you agree to the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+
+            {% if error %}
+            <div id="loginError" class="error">
+                <i class="fa-solid fa-triangle-exclamation"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <div id="successNotice" class="error" style="display:none; background:var(--success-soft); color:var(--success); border-color:color-mix(in srgb, var(--success) 35%, transparent);">
+                <i class="fa-solid fa-circle-check"></i> Account registered successfully! Please sign in with your credentials.
+            </div>
+
+            <div id="resetSuccessNotice" class="error" style="display:none; background:var(--success-soft); color:var(--success); border-color:color-mix(in srgb, var(--success) 35%, transparent);">
+                <i class="fa-solid fa-circle-check"></i> Password reset successfully! Please sign in with your new password.
+            </div>
+            <div id="emailUpdatedNotice" class="error" role="status" style="display:none; background:var(--success-soft); color:var(--success);">Your email was verified and updated. Sign in with your new email address.</div>
+
+            <div class="nav-links">
+                <a href="/register" class="register-link">Create Account &rarr;</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="aboutModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('aboutModal')">&times;</span>
+            <h3><i class="fa-solid fa-circle-info"></i> About System</h3>
+            <p><strong>MD57 Car Wash & Auto Detailing</strong></p>
+            <p>Welcome to MD57 Car Wash, where we combine premium care with cutting-edge convenience through our automated Queueing Machine system designed to get you back on the road faster.</p>
+        </div>
+    </div>
+
+    <div id="contactModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('contactModal')">&times;</span>
+            <h3><i class="fa-solid fa-phone"></i> Contacts</h3>
+            <p><strong>MD57 Car Wash Support</strong></p>
+            <p>Phone: 0966 150 2959</p>
+            <p>Email: md57carwash@gmail.com</p>
+            
+            <div class="social-links">
+                <a href="https://www.instagram.com/md57carwash?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" target="_blank" class="social-btn">Instagram</a>
+                <a href="https://www.tiktok.com/@md57carwash?is_from_webapp=1&sender_device=pc" target="_blank" class="social-btn">TikTok</a>
+                <a href="https://facebook.com/MD57CarwashAndAutoDetailing" target="_blank" class="social-btn">Facebook</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="locationModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('locationModal')">&times;</span>
+            <h3><i class="fa-solid fa-location-dot"></i> Location</h3>
+            <p><strong>MD57 Car Wash & Auto Detailing</strong></p>
+            <p>7th Avenue D. Aquino St. West Grace Park Caloocan</p>
+            <a href="https://www.google.com/maps/search/?api=1&query=7th+Avenue+D.+Aquino+St.+West+Grace+Park+Caloocan" target="_blank" class="map-link-btn">
+<i class="fa-solid fa-map-location-dot"></i> Open in Google Maps
+            </a>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/motion.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('registered')) {
+                const notice = document.getElementById('successNotice');
+                if (notice) notice.style.display = 'block';
+            }
+            if (params.get('reset')) {
+                const resetNotice = document.getElementById('resetSuccessNotice');
+                if (resetNotice) resetNotice.style.display = 'block';
+            }
+            if (params.get('email_updated')) document.getElementById('emailUpdatedNotice').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

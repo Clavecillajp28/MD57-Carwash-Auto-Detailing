@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Set your password · MD57</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+<main class="main-container">
+    <section class="login-card">
+        <img src="{{ url_for('static', filename='images/md57logo.jpg') }}" alt="MD57 Car Wash">
+        <h2>Set your own password</h2>
+        {% if invitation %}
+        <p class="subtitle">{{ invitation.fullname }} · {{ {'owner':'Owner','admin':'Manager','staff':'Staff/Washer'}[invitation.role] }}</p>
+        <p>Account: {{ invitation.email }}</p>
+        <p>Use your own account for every action. Keep your password private.</p>
+        <p id="passwordHint">{{ password_hint }}</p>
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="password">Your new password</label>
+                <input id="password" name="password" type="password" minlength="{{ password_min }}" maxlength="{{ password_max }}" pattern="{{ password_pattern }}" title="{{ password_hint }}" aria-describedby="passwordHint" autocomplete="new-password" required>
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm password</label>
+                <input id="confirm_password" name="confirm_password" type="password" minlength="{{ password_min }}" maxlength="{{ password_max }}" pattern="{{ password_pattern }}" title="{{ password_hint }}" autocomplete="new-password" required>
+            </div>
+            <button class="btn-primary" type="submit">Save my password</button>
+        </form>
+        {% else %}
+        <p>This link is invalid, expired, revoked, or already used. Ask the owner for a new invitation.</p>
+        {% endif %}
+        {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+        <p><a href="{{ url_for('auth.login_page') }}">Back to sign in</a></p>
+    </section>
+</main>
+</body>
+</html>

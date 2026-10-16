@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+{% block page_comment %}Manage Pricing{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Manage Pricing{% endblock %}
+
+{% block extra_style %}
+        .main-container {
+            flex: 1;
+            padding: 25px 16px;
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            margin: 0 0 4px 0;
+            color: var(--text-bright);
+            font-size: var(--text-md);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card .hint {
+            margin: 0 0 14px 0;
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+        }
+
+        table { min-width: 480px; }
+        th, td { text-align: left; }
+
+        td.price-cell, th.price-col { text-align: right; }
+        tr.inactive-row { opacity: 0.55; }
+
+        .price-input {
+            width: 84px;
+            padding: 6px 8px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-light);
+            color: var(--text-bright);
+            font-size: var(--text-xs);
+            text-align: right;
+            box-sizing: border-box;
+        }
+        .price-input:focus { border-color: var(--accent-amber); outline: none; }
+        .price-input.saving { border-color: var(--accent-amber); }
+        .price-input.saved { border-color: var(--accent-green); }
+
+        .bay-badge {
+            font-size: var(--text-xs);
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-amber-glow);
+            color: var(--accent-amber);
+            white-space: nowrap;
+        }
+
+        .toggle-active-btn {
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 5px 10px;
+            font-size: var(--text-xs);
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .toggle-active-btn.deactivate { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--accent-red); }
+        .toggle-active-btn.activate { background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--accent-green); }
+
+        .add-service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .add-service-grid label {
+            display: block;
+            font-size: var(--text-xs);
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+        .add-service-grid input, .add-service-grid select, .model-field {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-light);
+            color: var(--text-bright);
+            font-size: var(--text-xs);
+            box-sizing: border-box;
+        }
+        #addServicePrices {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .main-container { padding: 15px !important; }
+            .card { padding: 15px !important; }
+            .page-title { font-size: var(--text-lg); }
+        }
+{% endblock %}
+
+{% block content %}
+            <h2 class="page-title"><i class="fa-solid fa-tags"></i> Manage Service Pricing</h2>
+            <p class="page-subtitle">Edit prices for any service/vehicle-size combination below - changes apply immediately to the Pricing page and the booking form, no code changes needed.</p>
+
+            <div id="categoriesContainer" data-skeleton="cards:3"></div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="margin:0;"><i class="fa-solid fa-box-archive"></i> Retired Services</h3>
+                    <button class="btn-secondary btn-sm" onclick="toggleInactivePanel()" id="inactiveToggleBtn">Show Retired</button>
+                </div>
+                <p class="hint" style="margin-top: 6px;">Services removed from new bookings but kept for historical records (past bookings/feedback still reference them). Reactivate to make one bookable again.</p>
+                <div id="inactivePanel" style="display: none; margin-top: 10px;">
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>Service</th><th>Category</th><th>Bay</th><th></th></tr></thead>
+                            <tbody id="inactiveTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fa-solid fa-plus"></i> Add New Service</h3>
+                <p class="hint">Starting prices for each vehicle size this service applies to. Leave a size blank to skip it (e.g. a motorcycle-only service only needs the two Motor sizes filled in).</p>
+                <div class="add-service-grid">
+                    <div>
+                        <label>Service Name</label>
+                        <input type="text" id="newServiceName" placeholder="e.g. Underbody Wash">
+                    </div>
+                    <div>
+                        <label>Category</label>
+                        <select id="newServiceCategory" onchange="renderNewServicePriceInputs()">
+                            <option value="general">Car Wash &amp; General</option>
+                            <option value="detailing">Detailing</option>
+                            <option value="motorcycle">Motorcycle</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Bay</label>
+                        <select id="newServiceBay">
+                            <option value="Bay #1">Bay #1 (Main)</option>
+                            <option value="Bay #2">Bay #2 (Express)</option>
+                            <option value="Bay #3">Bay #3 (Detailing)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Duration (minutes)</label>
+                        <input type="number" id="newServiceDuration" min="1" value="30">
+                    </div>
+                </div>
+                <label style="display:block; font-size: var(--text-xs); text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; font-weight: 700;">Prices (&#8369;) per vehicle size</label>
+                <div id="addServicePrices"></div>
+                <button class="btn-primary" onclick="submitNewService()"><i class="fa-solid fa-plus"></i> Add Service</button>
+            </div>
+
+            <!-- The car models the booking forms suggest. A model a
+                 customer types that isn't listed is kept as typed and
+                 counted under "Other" on the Analytics chart - list it
+                 here, or merge it into the listed model it really is. -->
+            <div class="card">
+                <h3><i class="fa-solid fa-car-side"></i> Car Models</h3>
+                <p class="hint">The models suggested on the booking form and walk-in window. Vehicle size, not model, still decides the price.</p>
+
+                <div id="unlistedModelsPanel" style="display: none; margin-bottom: 14px;">
+                    <label style="display:block; font-size: var(--text-xs); text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; font-weight: 700;">Typed by customers, not on the list</label>
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>As Typed</th><th>Bookings</th><th>Merge Into</th><th></th></tr></thead>
+                            <tbody id="unlistedModelsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px;">
+                    <div style="flex: 1; min-width: 180px;">
+                        <label style="display:block; font-size: var(--text-xs); text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; font-weight: 700;">Add a model</label>
+                        <input type="text" id="newModelName" class="model-field" maxlength="60" placeholder="e.g. Toyota Veloz">
+                    </div>
+                    <button class="btn-primary" onclick="addVehicleModel(document.getElementById('newModelName').value)"><i class="fa-solid fa-plus"></i> Add Model</button>
+                    <button class="btn-secondary btn-sm" onclick="toggleModelList()" id="modelListToggleBtn">Show Full List</button>
+                </div>
+
+                <div id="modelListPanel" style="display: none;">
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>Model</th><th>Bookings</th><th></th></tr></thead>
+                            <tbody id="listedModelsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    let ALL_SERVICES = [];
+    let ALL_VEHICLE_TYPES = [];
+    const CATEGORY_LABELS = { general: 'Car Wash & General', detailing: 'Detailing', motorcycle: 'Motorcycle' };
+    // Which vehicle sizes apply to which category - a car service never
+    // needs Motor (S)/(L) columns and vice versa, same distinction
+    // /api/services itself draws when filtering the booking form's
+    // dropdown.
+    const CATEGORY_SIZES = {
+        general: ['Small', 'Medium', 'Large', 'XLarge'],
+        detailing: ['Small', 'Medium', 'Large', 'XLarge'],
+        motorcycle: ['Motor (S)', 'Motor (L)'],
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadServices();
+        renderNewServicePriceInputs();
+        loadVehicleModels();
+    });
+
+    // --- CAR MODELS ---
+    function loadVehicleModels() {
+        fetch('/api/admin/vehicle-models')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') throw new Error(data.message);
+                const mergeOptions = data.listed.map(m => `<option value="${Number(m.model_id)}">${escapeHtml(m.model_name)}</option>`).join('');
+
+                document.getElementById('unlistedModelsPanel').style.display = data.unlisted.length ? 'block' : 'none';
+                document.getElementById('unlistedModelsBody').innerHTML = data.unlisted.map((m, i) => `
+                    <tr>
+                        <td><strong>${escapeHtml(m.model_name)}</strong></td>
+                        <td>${Number(m.bookings)}</td>
+                        <td><select id="mergeTarget${i}" class="model-field">${mergeOptions}</select></td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn-secondary btn-sm" onclick="mergeVehicleModel('${escapeJsString(m.model_name)}', document.getElementById('mergeTarget${i}').value)">Merge</button>
+                            <button class="btn-secondary btn-sm" onclick="addVehicleModel('${escapeJsString(m.model_name)}')">Add to List</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('listedModelsBody').innerHTML = data.listed.map(m => `
+                    <tr>
+                        <td>${escapeHtml(m.model_name)}</td>
+                        <td>${Number(m.bookings)}</td>
+                        <td><button class="btn-secondary btn-sm" onclick="deleteVehicleModel(${Number(m.model_id)}, '${escapeJsString(m.model_name)}')">Remove</button></td>
+                    </tr>
+                `).join('');
+            })
+            .catch(() => showToast('Error', 'Could not load the car model list.', 'error'));
+    }
+
+    function toggleModelList() {
+        const panel = document.getElementById('modelListPanel');
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'block' : 'none';
+        document.getElementById('modelListToggleBtn').innerText = opening ? 'Hide Full List' : 'Show Full List';
+    }
+
+    function postModelChange(url, body) {
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            .then(res => res.json())
+            .then(data => {
+                showToast(data.status === 'success' ? 'Updated' : 'Error', data.message, data.status === 'success' ? 'success' : 'error');
+                if (data.status === 'success') {
+                    document.getElementById('newModelName').value = '';
+                    loadVehicleModels();
+                }
+            })
+            .catch(() => showToast('Error', 'Connection error.', 'error'));
+    }
+
+    function addVehicleModel(name) {
+        if (!name.trim()) { showToast('Required', 'Please enter a model name.', 'error'); return; }
+        postModelChange('/api/admin/add-vehicle-model', { model_name: name });
+    }
+
+    function mergeVehicleModel(fromName, intoModelId) {
+        postModelChange('/api/admin/merge-vehicle-model', { from_name: fromName, into_model_id: Number(intoModelId) });
+    }
+
+    async function deleteVehicleModel(modelId, name) {
+        if (!(await confirmDialog(`Bookings already recorded as ${name} keep it.`,
+            { title: `Remove "${name}" from the list?`, confirmText: 'Remove', danger: true }))) return;
+        postModelChange('/api/admin/delete-vehicle-model', { model_id: modelId });
+    }
+
+    async function loadServices() {
+        try {
+            const res = await fetch('/api/admin/services-all');
+            const data = await res.json();
+            if (data.status !== 'success') throw new Error(data.message);
+            ALL_SERVICES = data.data;
+            ALL_VEHICLE_TYPES = data.vehicle_types;
+            renderCategories();
+            renderInactiveTable();
+        } catch (err) {
+            document.getElementById('categoriesContainer').innerHTML =
+                '<div class="card"><p style="text-align:center; color: var(--accent-red);">Could not load services.</p></div>';
+        }
+    }
+
+    function renderCategories() {
+        const container = document.getElementById('categoriesContainer');
+        container.innerHTML = '';
+        ['general', 'detailing', 'motorcycle'].forEach(catKey => {
+            const services = ALL_SERVICES.filter(s => s.service_category === catKey && s.is_active);
+            if (services.length === 0) return;
+            const sizes = CATEGORY_SIZES[catKey];
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <h3><i class="fa-solid fa-layer-group"></i> ${escapeHtml(CATEGORY_LABELS[catKey])}</h3>
+                <p class="hint">Click a price to edit it - saves automatically when you click away.</p>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                ${sizes.map(s => `<th class="price-col">${escapeHtml(s)}</th>`).join('')}
+                                <th>Bay</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${services.map(svc => `
+                                <tr>
+                                    <td><strong>${escapeHtml(svc.service_name)}</strong></td>
+                                    ${sizes.map(size => `
+                                        <td class="price-cell">
+                                            <input type="number" class="price-input" min="0" step="1"
+                                                value="${svc.prices[size] !== undefined ? svc.prices[size] : ''}"
+                                                data-service-id="${svc.service_id}" data-vehicle-type="${escapeHtml(size)}"
+                                                onchange="saveServicePrice(this)">
+                                        </td>
+                                    `).join('')}
+                                    <td><span class="bay-badge">${escapeHtml(svc.default_bay)}</span></td>
+                                    <td><button class="toggle-active-btn deactivate" onclick="toggleServiceActive(${svc.service_id}, false, '${escapeJsString(svc.service_name)}')">Retire</button></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function renderInactiveTable() {
+        const tbody = document.getElementById('inactiveTableBody');
+        const inactive = ALL_SERVICES.filter(s => !s.is_active);
+        if (inactive.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No retired services.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = inactive.map(svc => `
+            <tr class="inactive-row">
+                <td>${escapeHtml(svc.service_name)}</td>
+                <td>${escapeHtml(CATEGORY_LABELS[svc.service_category] || svc.service_category)}</td>
+                <td><span class="bay-badge">${escapeHtml(svc.default_bay)}</span></td>
+                <td><button class="toggle-active-btn activate" onclick="toggleServiceActive(${svc.service_id}, true, '${escapeJsString(svc.service_name)}')">Reactivate</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function toggleInactivePanel() {
+        const panel = document.getElementById('inactivePanel');
+        const btn = document.getElementById('inactiveToggleBtn');
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'block' : 'none';
+        btn.innerText = opening ? 'Hide Retired' : 'Show Retired';
+    }
+
+    function saveServicePrice(input) {
+        input.classList.add('saving');
+        input.classList.remove('saved');
+        fetch('/api/admin/update-service-price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                service_id: input.dataset.serviceId,
+                vehicle_type: input.dataset.vehicleType,
+                price: input.value,
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            input.classList.remove('saving');
+            if (data.status === 'success') {
+                input.classList.add('saved');
+                setTimeout(() => input.classList.remove('saved'), 1500);
+            } else {
+                showToast('Error', data.message || 'Could not save price.', 'error');
+            }
+        })
+        .catch(() => {
+            input.classList.remove('saving');
+            showToast('Error', 'Connection error while saving price.', 'error');
+        });
+    }
+
+    async function toggleServiceActive(serviceId, makeActive, name) {
+        const confirmed = await confirmDialog(
+            makeActive ? 'It becomes bookable again right away.' : 'It can no longer be booked; past bookings keep it.',
+            { title: `${makeActive ? 'Reactivate' : 'Retire'} "${name}"?`, confirmText: makeActive ? 'Reactivate' : 'Retire', danger: !makeActive });
+        if (!confirmed) return;
+        fetch('/api/admin/toggle-service-active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ service_id: serviceId, is_active: makeActive }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            showToast(data.status === 'success' ? 'Updated' : 'Error', data.message, data.status === 'success' ? 'success' : 'error');
+            if (data.status === 'success') loadServices();
+        })
+        .catch(() => showToast('Error', 'Connection error.', 'error'));
+    }
+
+    function renderNewServicePriceInputs() {
+        const category = document.getElementById('newServiceCategory').value;
+        const sizes = CATEGORY_SIZES[category];
+        document.getElementById('addServicePrices').innerHTML = sizes.map(size => `
+            <div>
+                <label style="display:block; font-size: var(--text-xs); text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px;">${escapeHtml(size)}</label>
+                <input type="number" min="0" step="1" class="new-service-price-input" data-size="${escapeHtml(size)}" placeholder="0">
+            </div>
+        `).join('');
+    }
+
+    function submitNewService() {
+        const name = document.getElementById('newServiceName').value.trim();
+        const category = document.getElementById('newServiceCategory').value;
+        const bay = document.getElementById('newServiceBay').value;
+        const duration = document.getElementById('newServiceDuration').value;
+
+        if (!name) {
+            showToast('Required', 'Please enter a service name.', 'error');
+            return;
+        }
+
+        const prices = {};
+        document.querySelectorAll('.new-service-price-input').forEach(input => {
+            if (input.value !== '') prices[input.dataset.size] = input.value;
+        });
+        if (Object.keys(prices).length === 0) {
+            showToast('Required', 'Please enter at least one price.', 'error');
+            return;
+        }
+
+        fetch('/api/admin/add-service', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                service_name: name,
+                service_category: category,
+                default_bay: bay,
+                base_duration_minutes: duration,
+                prices: prices,
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            showToast(data.status === 'success' ? 'Added' : 'Error', data.message, data.status === 'success' ? 'success' : 'error');
+            if (data.status === 'success') {
+                document.getElementById('newServiceName').value = '';
+                document.querySelectorAll('.new-service-price-input').forEach(i => i.value = '');
+                loadServices();
+            }
+        })
+        .catch(() => showToast('Error', 'Connection error while adding service.', 'error'));
+    }
+</script>
+{% endblock %}

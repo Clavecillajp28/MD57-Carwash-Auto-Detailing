@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Account Security - MD57{% endblock %}
+{% block extra_style %}<link rel="stylesheet" href="{{ url_for('static',filename='css/profile.css') }}">{% endblock %}
+{% block content %}
+<div class="profile-page"><h1>Owner account security</h1>
+<p>Confirm sign-ins and sensitive account changes with a code sent to your Gmail.</p>
+<section class="profile-card">
+    <p id="mfaState" role="status">Loading security settings...</p>
+    <form id="mfaForm">
+        <label for="mfaPassword">Current password</label><input id="mfaPassword" type="password" autocomplete="current-password" maxlength="128">
+        <p>Google accounts must have signed in within the last five minutes. <a href="/auth/google?next=/account-security">Sign in again with Google</a></p>
+        <div id="mfaEmailField"><label for="mfaEmail">Owner Gmail address</label><input id="mfaEmail" type="email" autocomplete="email" maxlength="254"><p>Activation requires a code received at this address.</p></div>
+        <div id="mfaPurposeField" hidden><label for="mfaPurpose">Security action</label><select id="mfaPurpose"><option value="verify">Verify sensitive actions</option><option value="recovery">Replace recovery codes</option><option value="disable">Disable email verification</option></select></div>
+        <p id="mfaLegacy" hidden>Before switching, enter your existing authenticator or recovery code, then send a Gmail code.</p>
+        <label for="mfaCode">Email or recovery code</label><input id="mfaCode" autocomplete="one-time-code" maxlength="64" autocapitalize="off" spellcheck="false">
+        <div class="profile-actions"><button class="btn-secondary" name="action" value="send">Send code</button><button class="btn-primary" name="action" value="confirm">Enable email verification</button></div>
+    </form>
+    <div id="mfaRecovery" hidden><h2>Save your recovery codes privately</h2><p>Each code works once. These codes appear only now. All devices have been signed out.</p><pre id="mfaCodes" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><a href="/login" class="btn-primary">I saved my codes; sign in</a></div>
+    <p id="mfaMessage" role="status" aria-live="polite"></p>
+</section></div>
+{% endblock %}
+{% block extra_script %}<script>
+const mfaMessage=document.getElementById('mfaMessage'),mfaForm=document.getElementById('mfaForm');
+let emailSecurityEnabled=false;
+async function loadMfa(){
+    const response=await fetch('/api/security/mfa');const data=await response.json();if(!response.ok)throw Error(data.message);
+    emailSecurityEnabled=data.enabled&&data.method==='email';const legacy=data.enabled&&!emailSecurityEnabled;
+    document.getElementById('mfaState').textContent=emailSecurityEnabled?`Email verification enabled for ${data.email}. Sensitive actions require verification within the last five minutes.`:legacy?'Legacy authenticator enabled. Verify it before switching to Gmail.':'Email verification is not enabled. Confirm your Gmail to protect this Owner account.';
+    document.getElementById('mfaEmail').value=data.email||'';
+    document.getElementById('mfaEmailField').hidden=emailSecurityEnabled;
+    document.getElementById('mfaPurposeField').hidden=!emailSecurityEnabled;
+    document.getElementById('mfaLegacy').hidden=!legacy;
+    mfaForm.querySelector('[value="confirm"]').textContent=emailSecurityEnabled?'Confirm security action':'Enable email verification';
+}
+mfaForm.addEventListener('submit',async event=>{
+    event.preventDefault();const sending=event.submitter.value==='send';
+    const action=sending?(emailSecurityEnabled?'send':'setup'):(emailSecurityEnabled?document.getElementById('mfaPurpose').value:'enable');
+    if(['disable','recovery'].includes(action)&&!await confirmDialog('This signs out every device and changes your account security.',{title:'Change account security?',confirmText:'Continue'}))return;
+    const buttons=[...mfaForm.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+    try{
+        const response=await fetch('/api/security/mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,purpose:document.getElementById('mfaPurpose').value,email:document.getElementById('mfaEmail').value.trim(),current_password:document.getElementById('mfaPassword').value,code:document.getElementById('mfaCode').value.trim()})});
+        const data=await response.json();if(!response.ok)throw Error(data.message);mfaMessage.textContent=data.message;document.getElementById('mfaCode').value='';
+        if(sending)document.getElementById('mfaCode').focus();
+        if(data.recovery_codes){document.getElementById('mfaCodes').textContent=data.recovery_codes.join('\n');document.getElementById('mfaRecovery').hidden=false;mfaForm.hidden=true;}
+        else if(data.signed_out)location.assign('/login');
+    }catch(error){mfaMessage.textContent=error.message;}finally{buttons.forEach(b=>b.disabled=false);}
+});loadMfa().catch(error=>mfaMessage.textContent=error.message);
+</script>{% endblock %}

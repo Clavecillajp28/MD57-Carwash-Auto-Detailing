@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block page_comment %}Privacy Policy{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Privacy Policy{% endblock %}
+
+{% block extra_style %}
+        .main-container {
+            flex: 1;
+            padding: 25px 16px;
+            width: 100%;
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        .card {
+            font-size: var(--text-sm);
+            line-height: 1.7;
+        }
+        .card h3 {
+            color: var(--text-bright);
+            font-size: var(--text-md);
+            margin: 22px 0 8px 0;
+        }
+        .card h3:first-child { margin-top: 0; }
+        .card ul { margin: 6px 0; padding-left: 20px; }
+        .card li { margin-bottom: 4px; }
+        .updated-note {
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            margin-bottom: 18px;
+        }
+{% endblock %}
+
+{% block content %}
+            <h2 class="page-title"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</h2>
+            <p class="page-subtitle">How MD57 Car Wash & Auto Detailing collects, uses, and protects your information.</p>
+
+            <div class="card">
+                <p class="updated-note">Last updated: October 6, 2026</p>
+
+                <p>This policy covers the MD57 Car Wash & Auto Detailing queue, booking, and workforce management system ("the System"). It applies to customers who book a service or join the queue, and to staff/admin accounts used to run the shop. Personal information is handled in line with the Data Privacy Act of 2012 (Republic Act No. 10173); customers agree to this policy when they create an account.</p>
+
+                <h3>Information We Collect</h3>
+                <ul>
+                    <li><strong>Account information:</strong> name, email address, and (for staff/admin accounts) a username and role.</li>
+                    <li><strong>Booking details:</strong> vehicle plate number, vehicle type, service requested, booking date/time, assigned bay, and queue status.</li>
+                    <li><strong>Feedback:</strong> ratings and comments you submit after a completed service.</li>
+                    <li><strong>Google account information:</strong> if you sign in with Google, we receive your name, email address, and profile picture from Google - we do not receive your Google password.</li>
+                    <li><strong>Operational data:</strong> for staff accounts, attendance/shift records and job completion history, used to calculate performance rankings shown to admins.</li>
+                </ul>
+
+                <h3>How We Use Your Information</h3>
+                <ul>
+                    <li>To manage your booking, place you in the live queue, and notify you when your vehicle is ready.</li>
+                    <li>To send booking confirmations and status updates by email.</li>
+                    <li>To estimate wait times and staffing needs using historical booking patterns (no data is sold or used for advertising).</li>
+                    <li>To let you leave feedback on completed services, and to show aggregate ratings to shop management.</li>
+                    <li>For staff/admin accounts, to track attendance and job performance for internal scheduling and productivity reporting.</li>
+                </ul>
+
+                <h3>Third-Party Services</h3>
+                <p>We use a small number of third-party services to operate the System, each only for the specific purpose below:</p>
+                <ul>
+                    <li><strong>Google Sign-In:</strong> optional alternative to a password for logging in.</li>
+                    <li><strong>Email delivery (SMTP):</strong> to send booking confirmations and status notifications.</li>
+                    <li><strong>Weather data:</strong> used to display current conditions and adjust wait-time estimates - this call does not include any of your personal information.</li>
+                </ul>
+
+                <h3>Data Retention</h3>
+                <p>Booking, feedback, and attendance records are kept for as long as needed for queue history, reporting, and service-quality tracking. You may request deletion of your account and associated personal data by contacting us using the details below.</p>
+
+                <h3>Cookies & Sessions</h3>
+                <p>The System uses a session cookie to keep you signed in. It does not use third-party advertising or tracking cookies.</p>
+
+                <h3>Your Choices</h3>
+                <ul>
+                    <li>You can request a copy of, or the deletion of, your personal data by contacting us.</li>
+                    <li>You can ask us to correct information that is wrong or out of date.</li>
+                    <li>You can withdraw your consent at any time; your account is then closed.</li>
+                </ul>
+
+                <h3>Contact</h3>
+                <p>Questions about this policy or your data can be sent to the shop administrator through the contact details listed on the homepage.</p>
+            </div>
+{% endblock %}
+
+

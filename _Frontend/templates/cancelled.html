@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+{% block page_comment %}Cancelled Bookings{% endblock %}
+{% block title %}MD57 Car Wash - Cancelled Bookings{% endblock %}
+
+{% block extra_style %}
+        .list-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+        .list-filters .search-box { flex: 1 1 240px; margin: 0 !important; }
+        .list-filters label { display: block; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+        .list-filters input[type="date"] { min-height: 40px; }
+        .list-filters .date-field { flex: 0 1 160px; min-width: 130px; }
+        @media (max-width: 600px) { .list-filters .date-field { flex: 1 1 calc(50% - 5px); } }
+        .main-container {
+            flex: 1;
+            padding: 35px 20px;
+            max-width: 1500px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .bays-grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            margin-bottom: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            /* Grid items default to min-width:auto, which refuses to shrink
+               below a queue-item-card row's longest unbroken line - on a
+               phone-width single column that pushed the card (and the
+               page) wider than the viewport instead of letting that text
+               ellipsis-truncate. */
+            min-width: 0;
+        }
+
+        .badge-status {
+            background: color-mix(in srgb, var(--danger) 10%, transparent);
+            color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+        }
+        .badge-status.badge-no-show {
+            background: color-mix(in srgb, var(--warning) 10%, transparent);
+            color: var(--warning);
+            border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+        }
+
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 18px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+        .pagination-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        @media (max-width: 900px) {
+            .bays-grid-container {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container { padding: 24px 15px !important; }
+            .bays-grid-container { grid-template-columns: 1fr !important; }
+            .card { padding: 20px !important; }
+            .page-title { font-size: var(--text-xl); }
+            /* The plate number and its status badge ("No-Show (Auto)" is
+               the longest) share one nowrap/ellipsis line on desktop where
+               there's room - at phone width that combination is too wide
+               for .queue-item-info's share of the row, and text-overflow
+               doesn't apply per-flex-child, so the badge was getting a
+               hard clip instead of a clean ellipsis. Letting the row wrap
+               drops the badge to its own line instead. */
+            .queue-item-title {
+                white-space: normal;
+                overflow: visible;
+                text-overflow: clip;
+                flex-wrap: wrap;
+            }
+        }
+{% endblock %}
+
+{% block content %}
+                <h2 class="page-title"><i class="fa-solid fa-ban"></i> Cancelled Bookings</h2>
+                <p class="page-subtitle">Grouped by Bay and limited to 5 items per page using the &lt; and &gt; buttons.</p>
+
+                <div class="list-filters">
+                    <input type="text" id="cancelledSearchInput" class="search-box" placeholder="Search by plate, customer name, or service..." onkeyup="applyCancelledSearch()" aria-label="Search cancelled bookings" style="width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-size: var(--text-sm); outline: none;">
+                    <div class="date-field"><label for="cancelledFrom">Cancelled from</label><input type="date" id="cancelledFrom" onchange="applyCancelledSearch()"></div>
+                    <div class="date-field"><label for="cancelledTo">To</label><input type="date" id="cancelledTo" onchange="applyCancelledSearch()"></div>
+                    <button type="button" class="btn-secondary btn-sm" onclick="clearCancelledDates()" style="min-height: 40px;">Clear dates</button>
+                    <button type="button" class="btn-primary btn-sm" onclick="exportCancelledCSV()" style="min-height: 40px;"><i class="fa-solid fa-download"></i> Export CSV</button>
+                </div>
+
+                <div class="bays-grid-container">
+
+                    <!-- BAY #1 CANCELLED LIST -->
+                    <div class="card">
+                        <h3 style="margin: 0 0 12px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--accent-amber); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);" id="count-bay-1">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-1" data-skeleton="cards:2"></div>
+                        <div class="pagination-container" id="pagination-bay-1">
+                            <span id="page-info-bay-1">1 / 1</span>
+                            <div class="pagination-btns">
+                                <button class="page-btn" id="prev-btn-bay-1" onclick="changePage('Bay #1', -1)">&lt;</button>
+                                <button class="page-btn" id="next-btn-bay-1" onclick="changePage('Bay #1', 1)">&gt;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BAY #2 CANCELLED LIST -->
+                    <div class="card">
+                        <h3 style="margin: 0 0 12px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--accent-amber); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);" id="count-bay-2">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-2" data-skeleton="cards:2"></div>
+                        <div class="pagination-container" id="pagination-bay-2">
+                            <span id="page-info-bay-2">1 / 1</span>
+                            <div class="pagination-btns">
+                                <button class="page-btn" id="prev-btn-bay-2" onclick="changePage('Bay #2', -1)">&lt;</button>
+                                <button class="page-btn" id="next-btn-bay-2" onclick="changePage('Bay #2', 1)">&gt;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BAY #3 CANCELLED LIST -->
+                    <div class="card">
+                        <h3 style="margin: 0 0 12px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--accent-amber); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);" id="count-bay-3">0 Vehicles</span>
+                        </h3>
+                        <div class="queue-card-list" id="list-bay-3" data-skeleton="cards:2"></div>
+                        <div class="pagination-container" id="pagination-bay-3">
+                            <span id="page-info-bay-3">1 / 1</span>
+                            <div class="pagination-btns">
+                                <button class="page-btn" id="prev-btn-bay-3" onclick="changePage('Bay #3', -1)">&lt;</button>
+                                <button class="page-btn" id="next-btn-bay-3" onclick="changePage('Bay #3', 1)">&gt;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {% if role == 'admin' %}
+                <!-- ARCHIVED CANCELLATIONS (audit trail) - cancelled bookings
+                     older than the retention window are moved out of this
+                     live list automatically (see cleanup.py) so this page
+                     doesn't grow forever, but the record itself is never
+                     deleted - just moved to reservations_archive. Loaded on
+                     demand rather than always-on, so this stays a compact
+                     admin-only audit tool instead of permanent page weight. -->
+                <div class="card" style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <h3 style="margin: 0; color: var(--text-bright); font-size: var(--text-md);"><i class="fa-solid fa-box-archive"></i> Archived Cancellations</h3>
+                        <button class="btn-secondary btn-sm" onclick="toggleArchivedCancellations()" id="archivedToggleBtn">Show Archive</button>
+                    </div>
+                    <p style="font-size: var(--text-xs); color: var(--text-muted); margin: 6px 0 0 0;">Cancelled bookings older than the retention window - preserved for auditing, no longer shown above.</p>
+                    <div id="archivedCancellationsPanel" style="display:none; margin-top: 14px;">
+                        <div class="table-responsive" style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse: collapse; font-size: var(--text-xs); min-width: 560px;">
+                                <thead>
+                                    <tr style="text-align:left; border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding:8px;">Plate</th>
+                                        <th style="padding:8px;">Customer</th>
+                                        <th style="padding:8px;">Service</th>
+                                        <th style="padding:8px;">Bay</th>
+                                        <th style="padding:8px;">Cancelled</th>
+                                        <th style="padding:8px;">Archived</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="archivedCancellationsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    // 5 items per page tracker per Bay
+    const ITEMS_PER_PAGE = 5;
+    let currentPages = {
+        "Bay #1": 1,
+        "Bay #2": 1,
+        "Bay #3": 1
+    };
+
+    onLiveUpdate(loadCancelledCars);
+
+    document.addEventListener("DOMContentLoaded", function() {
+        loadCancelledCars();
+    });
+
+    async function openConfirmModal(reservationId, plateNumber) {
+        if (CURRENT_USER.role !== 'admin') {
+            showToast('Access Denied', 'Only the Owner or a Manager can restore a cancelled vehicle.', 'error');
+            return;
+        }
+        if (await confirmDialog('It rejoins the active queue at the very end.',
+            { title: `Restore ${plateNumber}?`, confirmText: 'Restore' })) {
+            executeRestore(reservationId);
+        }
+    }
+
+    function changePage(bayKey, direction) {
+        currentPages[bayKey] += direction;
+        applyCancelledSearch();
+    }
+
+    // Raw, unfiltered list from the server - kept separate from what's
+    // actually rendered so the live refresh (see onLiveUpdate
+    // above) re-applies whatever search is currently typed
+    // instead of wiping it out on every refresh.
+    let allCancelledData = [];
+
+    // The booking a notification pointed at (?booking=<id>): once the list
+    // has loaded, the search box is set to its plate so it's the card shown.
+    let focusBookingId = takeFocusBookingId();
+
+    function loadCancelledCars() {
+        fetch('/api/get-cancelled')
+            .then(res => res.json())
+            .then(data => {
+                allCancelledData = (data.status === 'success' && Array.isArray(data.data)) ? data.data : [];
+                if (focusBookingId) {
+                    const reservationId = focusBookingId;
+                    focusBookingId = null;
+                    const item = allCancelledData.find(c => Number(c.id) === reservationId);
+                    if (item) {
+                        document.getElementById('cancelledSearchInput').value = item.plate_number;
+                    } else {
+                        showToast("Not on This List", `Booking MD57-${reservationId} is no longer here - it was restored or moved to the archive.`, "error");
+                    }
+                }
+                applyCancelledSearch();
+            })
+            .catch(err => {
+                console.error("Error fetching cancelled cars:", err);
+            });
+    }
+
+    let shownCancelled = [];
+
+    function applyCancelledSearch() {
+        let query = (document.getElementById('cancelledSearchInput').value || '').trim().toLowerCase();
+        shownCancelled = allCancelledData.filter(item => {
+            if (!inDateRange(item.cancelled_at, 'cancelledFrom', 'cancelledTo')) return false;
+            if (!query) return true;
+            let haystack = [
+                item.plate_number, item.customer_name, item.service_type,
+                item.email, item.cancel_reason, item.assigned_bay,
+            ].filter(Boolean).join(' ').toLowerCase();
+            return haystack.includes(query);
+        });
+        renderCancelledCards(shownCancelled);
+    }
+
+    function clearCancelledDates() {
+        document.getElementById('cancelledFrom').value = '';
+        document.getElementById('cancelledTo').value = '';
+        applyCancelledSearch();
+    }
+
+    // Exports what's listed (dates and search applied). Bookings already
+    // moved to the archive aren't in this list.
+    function exportCancelledCSV() {
+        if (!shownCancelled.length) {
+            showToast('Nothing to Export', 'No cancelled bookings match the dates and search.', 'error');
+            return;
+        }
+        downloadCSV(`md57_cancelled_${dateRangeLabel('cancelledFrom', 'cancelledTo')}.csv`,
+            ['Customer Name', 'Email', 'Plate Number', 'Service Type', 'Vehicle Type', 'Bay', 'Source', 'Booked For', 'Cancelled At', 'Reason'],
+            shownCancelled.map(item => [
+                item.customer_name || 'N/A', item.email || '', item.plate_number, item.service_type, item.vehicle_type || '',
+                item.assigned_bay || '', item.booking_source || '',
+                item.booking_date ? `${item.booking_date} ${item.booking_time || ''}`.trim() : 'Walk-in',
+                item.cancelled_at || '', item.cancel_reason || '',
+            ]));
+    }
+
+    function renderCancelledCards(cancelledList) {
+        let bays = {
+            "Bay #1": document.getElementById('list-bay-1'),
+            "Bay #2": document.getElementById('list-bay-2'),
+            "Bay #3": document.getElementById('list-bay-3')
+        };
+
+        Object.keys(bays).forEach(bayKey => {
+            if (bays[bayKey]) bays[bayKey].innerHTML = '';
+        });
+
+        let bayBuckets = { "Bay #1": [], "Bay #2": [], "Bay #3": [] };
+
+        cancelledList.forEach(item => {
+            item.assigned_bay = getNormalizedBayKey(item);
+            bayBuckets[item.assigned_bay].push(item);
+        });
+
+        // Restoring a cancelled booking back to the active queue is
+        // admin-only now - staff can still see the cancelled list, just not
+        // act on it.
+        let isAdmin = (CURRENT_USER.role === 'admin');
+
+        Object.keys(bayBuckets).forEach(bayKey => {
+            let list = bayBuckets[bayKey];
+            let container = bays[bayKey];
+            let bayIdSlug = bayKey.toLowerCase().replace('#', '').replace(/\s+/g, '-');
+            let pageInfoEl = document.getElementById(`page-info-${bayIdSlug}`);
+            let prevBtn = document.getElementById(`prev-btn-${bayIdSlug}`);
+            let nextBtn = document.getElementById(`next-btn-${bayIdSlug}`);
+            let countElement = document.getElementById(`count-${bayIdSlug}`);
+
+            if (!container) return;
+
+            let totalItems = list.length;
+            let totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+
+            if (currentPages[bayKey] > totalPages) {
+                currentPages[bayKey] = totalPages > 0 ? totalPages : 1;
+            }
+            if (currentPages[bayKey] < 1) {
+                currentPages[bayKey] = 1;
+            }
+
+            if (countElement) {
+                countElement.innerText = `${totalItems} Vehicle${totalItems === 1 ? '' : 's'}`;
+            }
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: var(--text-xs);">No cancelled bookings in ${bayKey}</div>`;
+                if (pageInfoEl) pageInfoEl.innerText = `1 / 1`;
+                if (prevBtn) prevBtn.disabled = true;
+                if (nextBtn) nextBtn.disabled = true;
+            } else {
+                let startIndex = (currentPages[bayKey] - 1) * ITEMS_PER_PAGE;
+                let endIndex = startIndex + ITEMS_PER_PAGE;
+                let paginatedItems = list.slice(startIndex, endIndex);
+
+                paginatedItems.forEach((item, idx) => {
+                    let actualIndex = startIndex + idx;
+                    let plate = item.plate_number;
+                    let custName = item.customer_name || (item.email ? item.email.split('@')[0] : "Walk-in Customer");
+                    let cancelTime = formatTimestamp(item.cancelled_at);
+                    let statusBadgeHtml = item.cancel_reason === 'no_show'
+                        ? `<span class="badge-status badge-no-show">No-Show (Auto)</span>`
+                        : item.cancel_reason === 'staff_absent'
+                            ? `<span class="badge-status badge-no-show">Staff Absent (Auto)</span>`
+                            : `<span class="badge-status">Cancelled</span>`;
+
+                    let actionButtonHtml = '';
+                    if (isAdmin) {
+                        actionButtonHtml = `<button class="btn-restore" onclick="openConfirmModal(${Number(item.id)}, '${escapeJsString(plate)}')">Restore</button>`;
+                    }
+
+                    container.innerHTML += `
+                        <div class="queue-item-card">
+                            <div class="queue-item-info">
+                                <div class="queue-item-title">
+                                    <span>#${actualIndex + 1} • ${escapeHtml(plate)}</span>
+                                    ${statusBadgeHtml}
+                                </div>
+                                <div class="queue-item-details">
+                                    <i class="fa-solid fa-user"></i> ${escapeHtml(custName)} &bull; <i class="fa-solid fa-car"></i> ${escapeHtml(item.service_type)}
+                                </div>
+                                <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;">
+                                    Cancelled At: ${escapeHtml(cancelTime)}
+                                </div>
+                            </div>
+                            <div class="queue-item-meta">
+                                ${actionButtonHtml}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (pageInfoEl) pageInfoEl.innerText = `${currentPages[bayKey]} / ${totalPages}`;
+                if (prevBtn) prevBtn.disabled = currentPages[bayKey] <= 1;
+                if (nextBtn) nextBtn.disabled = currentPages[bayKey] >= totalPages;
+            }
+        });
+    }
+
+    function executeRestore(reservationId) {
+        fetch('/api/restore-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reservation_id: reservationId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast("Restored to Queue!", data.message, "success");
+                loadCancelledCars();
+            } else {
+                showToast("Error", data.message || "Failed to restore vehicle", "error");
+            }
+        })
+        .catch(err => {
+            showToast("Error", "Network connection failed", "error");
+        });
+    }
+
+    // Archived cancellations (admin-only) - loaded on demand, not on page
+    // load, so this stays a compact audit tool rather than an always-on
+    // section that competes with the live Cancelled lists above it.
+    let archivedCancellationsLoaded = false;
+    function toggleArchivedCancellations() {
+        const panel = document.getElementById('archivedCancellationsPanel');
+        const btn = document.getElementById('archivedToggleBtn');
+        if (!panel || !btn) return;
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'block' : 'none';
+        btn.innerText = opening ? 'Hide Archive' : 'Show Archive';
+        if (opening && !archivedCancellationsLoaded) loadArchivedCancellations();
+    }
+
+    function loadArchivedCancellations() {
+        const body = document.getElementById('archivedCancellationsBody');
+        if (!body) return;
+        body.innerHTML = skeletonHtml('rows:3x6');
+        fetch('/api/get-archived-cancellations')
+            .then(res => res.json())
+            .then(data => {
+                archivedCancellationsLoaded = true;
+                if (data.status !== 'success' || !Array.isArray(data.data) || data.data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" style="padding:14px; text-align:center; color: var(--text-muted);">No archived records yet.</td></tr>';
+                    return;
+                }
+                body.innerHTML = data.data.map(row => `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding:8px;">${escapeHtml(row.plate_number)}</td>
+                        <td style="padding:8px;">${escapeHtml(row.customer_name || '-')}</td>
+                        <td style="padding:8px;">${escapeHtml(row.service_type || '-')}</td>
+                        <td style="padding:8px;">${escapeHtml(row.assigned_bay || '-')}</td>
+                        <td style="padding:8px;">${escapeHtml(row.cancelled_at || '-')}</td>
+                        <td style="padding:8px;">${escapeHtml(row.archived_at || '-')}</td>
+                    </tr>
+                `).join('');
+            })
+            .catch(() => {
+                body.innerHTML = '<tr><td colspan="6" style="padding:14px; text-align:center; color: var(--accent-red);">Failed to load archive.</td></tr>';
+            });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,1538 @@
+{% extends "base.html" %}
+{% block page_comment %}Queue Dashboard{% endblock %}
+{% block title %}MD57 Car Wash - Live Queue Dashboard{% endblock %}
+
+
+{% block extra_style %}
+        .assign-note { margin: 2px 0 0; font-size: var(--text-xs); color: var(--warning); }
+        .main-container {
+            flex: 1;
+            padding: 32px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            max-width: 1550px;
+            margin: 0 auto;
+        }
+        /* Typography comes from the shared .page-title/.page-subtitle in
+           style.css - only the layout needed for the live-badge that sits
+           next to this page's title lives here. */
+        .page-title {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .dashboard-alert {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 10px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            border: 1px solid;
+        }
+        .dashboard-alert > span { min-width: 0; word-break: break-word; }
+        .dashboard-alert.info {
+            background: color-mix(in srgb, var(--info) 8%, transparent);
+            border-color: color-mix(in srgb, var(--info) 25%, transparent);
+            color: var(--info);
+        }
+        .dashboard-alert.assignment {
+            background: color-mix(in srgb, var(--success) 8%, transparent);
+            border-color: color-mix(in srgb, var(--success) 30%, transparent);
+            color: var(--accent-green);
+        }
+        .dashboard-alert.pending {
+            background: color-mix(in srgb, var(--info) 8%, transparent);
+            border-color: color-mix(in srgb, var(--info) 25%, transparent);
+            color: var(--info);
+        }
+        .dashboard-alert a, .dashboard-alert button.alert-link {
+            color: inherit;
+            text-decoration: underline;
+            font-weight: 700;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-size: inherit;
+        }
+
+        .queue-toolbar {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 14px 18px;
+            margin-bottom: 18px;
+        }
+        .queue-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .queue-stat { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .queue-stat i { color: var(--accent); font-size: var(--text-lg); width: 22px; text-align: center; flex-shrink: 0; }
+        .queue-stat div { display: flex; flex-direction: column; min-width: 0; }
+        .queue-stat strong { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; color: var(--text-strong); line-height: 1.2; white-space: nowrap; }
+        .queue-stat span { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; white-space: nowrap; }
+        #stat-est-wait, #stat-est-label { white-space: normal; }
+        .queue-timing { font-size: var(--text-xs); color: var(--text-muted); line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+        .queue-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .filter-container { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .filter-select { cursor: pointer; font-weight: 600; font-size: var(--text-sm); padding: 9px 12px; }
+        .live-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: livePulseDot 1.8s ease-in-out infinite; }
+        @keyframes livePulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
+
+        .bays-grid-container {
+            display: block;
+        }
+
+        /* Bay picker - only the selected bay's card renders below it now,
+           instead of all 3 side by side (which forced 3 full card heights
+           of vertical scroll on anything narrower than a wide desktop).
+           Same pill-tab visual language as the Analytics page's chart
+           switcher, for consistency across the app. */
+        .bay-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .bay-tab-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            font-size: var(--text-xs);
+            font-weight: 700;
+            cursor: pointer;
+            transition: all var(--fast) ease;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .bay-tab-btn:hover {
+            border-color: var(--accent-amber);
+            color: var(--accent-amber);
+        }
+        .bay-tab-btn.active {
+            background: var(--accent-amber);
+            border-color: var(--accent-amber);
+            color: var(--on-fill);
+        }
+
+        /* The three .card bay panels stay in the DOM permanently (their
+           inner .queue-card-list content gets replaced on every data
+           refresh) - only CSS visibility switches with the tab, so a
+           background refresh can never reset which bay is showing. */
+        .bays-grid-container[data-active-bay="1"] .card:nth-of-type(2),
+        .bays-grid-container[data-active-bay="1"] .card:nth-of-type(3) { display: none; }
+        .bays-grid-container[data-active-bay="2"] .card:nth-of-type(1),
+        .bays-grid-container[data-active-bay="2"] .card:nth-of-type(3) { display: none; }
+        .bays-grid-container[data-active-bay="3"] .card:nth-of-type(1),
+        .bays-grid-container[data-active-bay="3"] .card:nth-of-type(2) { display: none; }
+
+        .bays-grid-container .card {
+            border-top: 1px solid var(--edge);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            /* Grid items default to min-width:auto, which refuses to shrink
+               below the width of the longest unbroken line inside them
+               (a queue-item-card row's plate/customer/service text) - on a
+               phone-width single column that pushed the whole card, and
+               the page with it, wider than the viewport instead of letting
+               that text ellipsis-truncate the way its own CSS intends. */
+            min-width: 0;
+        }
+
+        .search-box { flex: 1 1 200px; min-width: 0; font-size: var(--text-sm); padding: 9px 12px; }
+
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+
+        /* Each bay card: LIVE SERVICE (the car in the bay now - in progress
+           or awaiting confirmation) above, QUEUE (cars still waiting) below. */
+        .bay-section-label {
+            font-size: var(--text-xs);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            margin: 12px 0 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .bay-section-label:first-of-type { margin-top: 0; }
+        .bay-section-label.live i { color: var(--accent-green); }
+        .bay-section-label.queue i { color: var(--accent-amber); }
+        .live-service-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .live-service-empty {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            background: var(--bg-light);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
+            text-align: center;
+        }
+        .live-service-item {
+            background: color-mix(in srgb, var(--success) 6%, transparent);
+            border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+            border-radius: var(--radius-md);
+            padding: 9px 12px;
+            cursor: pointer;
+            transition: all var(--fast) ease;
+        }
+        .live-service-item { box-shadow: var(--glow-live); border-color: transparent; }
+        .live-service-item:hover { border-color: var(--accent-green); }
+        .live-service-item.pending-confirmation {
+            background: color-mix(in srgb, var(--info) 6%, transparent);
+            border-color: transparent;
+            box-shadow: var(--glow-pending);
+        }
+        .live-service-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            font-size: var(--text-xs);
+            font-weight: 700;
+            color: var(--text-bright);
+        }
+        .live-service-item-details {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .badge-walkin {
+            background: color-mix(in srgb, var(--info) 10%, transparent);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        }
+        .badge-online {
+            background: color-mix(in srgb, var(--info) 10%, transparent);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        }
+
+        /* In progress / arrived: things going right, so green. */
+        .status-cleaning {
+            background: var(--success-soft);
+            color: var(--success);
+            border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
+        }
+        .status-waiting {
+            background: color-mix(in srgb, var(--warning) 10%, transparent);
+            color: var(--warning);
+            border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
+        }
+        .status-scheduled {
+            background: color-mix(in srgb, var(--info) 10%, transparent);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        }
+        .status-review {
+            background: color-mix(in srgb, var(--info) 10%, transparent);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 25%, transparent);
+        }
+
+        .modal-content {
+            max-width: 420px;
+        }
+
+        .modal-header h3 { margin: 0; color: var(--text-bright); font-size: var(--text-lg); font-weight: 700; }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: var(--text-xs); color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .form-group input, .form-group select {
+            width: 100%;
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            padding: 11px 14px;
+            border-radius: var(--radius-md);
+            color: var(--text-main);
+            font-size: var(--text-sm);
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--accent-amber);
+            background: var(--card-bg);
+            outline: none;
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 10%, transparent);
+        }
+
+        /* Customers don't get "Done today" (a staff figure) - three numbers. */
+        .queue-stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+        /* The customer's own car(s), above the bays. */
+        .my-car-card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+        .my-car-card:empty { display: none; }
+        .my-car-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            background: color-mix(in srgb, var(--accent) 8%, var(--card-bg));
+            border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+            cursor: pointer;
+            text-align: left;
+            width: 100%;
+            font: inherit;
+            color: inherit;
+        }
+        .my-car-item:hover { border-color: var(--accent); }
+        .my-car-item > i { font-size: var(--text-lg); color: var(--accent); width: 24px; text-align: center; flex-shrink: 0; }
+        .my-car-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .my-car-title { font-family: var(--font-display); font-weight: 600; font-size: var(--text-md); color: var(--text-strong); }
+        .my-car-sub { font-size: var(--text-sm); color: var(--text-muted); }
+
+        /* Queue rows: the customer's own car, bookings for a later day, the chevron. */
+        .queue-item-card.is-mine { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+        .queue-item-card.is-later { opacity: 0.78; }
+        .badge-mine {
+            background: var(--accent);
+            color: var(--on-fill);
+            font-family: inherit;
+            font-size: var(--text-xs);
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+        }
+        .queue-item-chevron { color: var(--text-muted); font-size: var(--text-xs); flex-shrink: 0; }
+        .queue-later-label {
+            font-size: var(--text-xs);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            margin: 10px 0 2px;
+        }
+        .queue-empty-today { text-align: center; color: var(--text-muted); padding: 14px; font-size: var(--text-xs); }
+
+        @media (max-width: 768px) {
+            .main-container { padding: 18px 14px !important; }
+            .page-title { font-size: var(--text-lg); }
+            .queue-stats, .queue-stats.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .filter-container { flex: 1 1 100%; }
+            .filter-select { flex: 1; min-width: 0; }
+            .search-box { flex: 1 1 100%; }
+            .btn-group { width: 100%; margin-left: 0; }
+            .card { padding: 16px !important; }
+            .queue-item-card { padding: 12px 14px; }
+            /* Phone width: wrap a row's title and details instead of cutting
+               off the wait estimate or the "Your car" badge. */
+            .queue-item-title { flex-wrap: wrap; white-space: normal; row-gap: 4px; }
+            .queue-item-details { white-space: normal; line-height: 1.5; }
+        }
+{% endblock %}
+
+{% block content %}
+            <h2 class="page-title">
+                <span><i class="fa-solid fa-car"></i> Live Queue Dashboard</span>
+                <span class="badge success"><span class="live-dot"></span> Live</span>
+            </h2>
+            <p class="page-subtitle">Three bays - Main, Express and Detailing. A scheduled booking is released 30 minutes after its time if the customer hasn't arrived.</p>
+
+            <div id="dashboardAlerts" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;"></div>
+
+            {% if session.get('role') == 'customer' %}
+            <div id="myCarCard" class="my-car-card" aria-live="polite"></div>
+            {% endif %}
+
+            <!-- One compact bar: the numbers, then the controls - so the
+                 bays start on the first screen. -->
+            <div class="queue-toolbar card">
+                <div class="queue-stats{% if session.get('role') == 'customer' %} three{% endif %}">
+                    <div class="queue-stat"><i class="fa-solid fa-car"></i><div><strong id="stat-active-count">0</strong><span>In queue today</span></div></div>
+                    <div class="queue-stat"><i class="fa-solid fa-stopwatch"></i><div><strong id="stat-est-wait">-</strong><span id="stat-est-label">Time until finished</span></div></div>
+                    <div class="queue-stat"><i class="fa-solid fa-warehouse"></i><div><strong id="stat-bay-occupancy">0 / 3</strong><span>Bays washing</span></div></div>
+                    {% if session.get('role') != 'customer' %}
+                    <div class="queue-stat"><i class="fa-solid fa-flag-checkered"></i><div><strong id="stat-completed-today">0</strong><span>Done today</span></div></div>
+                    {% endif %}
+                </div>
+                <div class="queue-controls">
+                    <!-- Online/walk-in is a staff operational distinction
+                         (how each customer joined the queue), so the
+                         control is hidden for customers. The select itself
+                         stays in the DOM and the script points it at
+                         whichever view holds the customer's own booking. -->
+                    <div class="filter-container"{% if session.get('role') == 'customer' %} style="display:none;"{% endif %}>
+                        <label for="categoryDropdown">Show</label>
+                        <select id="categoryDropdown" class="filter-select" onchange="handleCategoryFilterChange()" title="The same three bays, filtered by how each customer joined the queue">
+                            <option value="online" selected>Online bookings</option>
+                            <option value="walkin">Walk-ins</option>
+                        </select>
+                    </div>
+                    <input type="text" id="searchInput" class="search-box" placeholder="Search plate or service..." onkeyup="filterQueueTables()">
+                    <div class="btn-group">
+                        {% if session.get('role') and session.get('role') != 'customer' %}
+                        <button class="btn-primary" id="walkinBtn" onclick="openWalkinModal()"><i class="fa-solid fa-plus"></i> Walk-in</button>
+                        <button class="btn-secondary" onclick="exportQueueCSV()"><i class="fa-solid fa-download"></i> CSV</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="walkinContainerView" style="display: none;">
+                <div class="bay-tabs">
+                    <button type="button" class="bay-tab-btn active" onclick="switchBayTab('walkin', 1, this)"><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</button>
+                    <button type="button" class="bay-tab-btn" onclick="switchBayTab('walkin', 2, this)"><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</button>
+                    <button type="button" class="bay-tab-btn" onclick="switchBayTab('walkin', 3, this)"><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</button>
+                </div>
+                <div class="bays-grid-container" id="walkinBaysGrid" data-active-bay="1">
+                    <div class="card">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-1">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-bay-1" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-bay-1" data-skeleton="cards:2"></div>
+                    </div>
+
+                    <div class="card bay-2">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-2">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-bay-2" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-bay-2" data-skeleton="cards:2"></div>
+                    </div>
+
+                    <div class="card bay-3">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-bay-3">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-bay-3" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-bay-3" data-skeleton="cards:2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="onlineContainerView">
+                <div class="bay-tabs">
+                    <button type="button" class="bay-tab-btn active" onclick="switchBayTab('online', 1, this)"><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</button>
+                    <button type="button" class="bay-tab-btn" onclick="switchBayTab('online', 2, this)"><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</button>
+                    <button type="button" class="bay-tab-btn" onclick="switchBayTab('online', 3, this)"><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</button>
+                </div>
+                <div class="bays-grid-container" id="onlineBaysGrid" data-active-bay="1">
+                    <div class="card">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #1 (Main)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-online-bay-1">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-online-bay-1" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-online-bay-1" data-skeleton="cards:2"></div>
+                    </div>
+
+                    <div class="card bay-2">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #2 (Express)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-online-bay-2">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-online-bay-2" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-online-bay-2" data-skeleton="cards:2"></div>
+                    </div>
+
+                    <div class="card bay-3">
+                        <h3 style="margin: 0 0 6px 0; color: var(--text-bright); font-size: var(--text-md); display: flex; justify-content: space-between; align-items: center; font-weight: 700;">
+                            <span><i class="fa-solid fa-warehouse"></i> Bay #3 (Detailing)</span>
+                            <span style="font-size: var(--text-xs); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success); padding: 4px 9px; border-radius: var(--radius-sm); font-weight: 700;" id="count-online-bay-3">0 Waiting</span>
+                        </h3>
+                        <div class="bay-section-label live"><i class="fa-solid fa-car-burst"></i> Live Service</div>
+                        <div class="live-service-panel" id="washer-online-bay-3" data-skeleton="cards:1"></div>
+                        <div class="bay-section-label queue"><i class="fa-regular fa-clock"></i> Queue</div>
+                        <div class="queue-card-list" id="list-online-bay-3" data-skeleton="cards:2"></div>
+                    </div>
+                </div>
+            </div>
+{% endblock %}
+
+{% block modals %}
+    <!-- DETAIL MODAL -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalPlateTitle">Vehicle Details</h3>
+                <button class="close-btn" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 22px;">
+                <div class="detail-row"><span class="detail-label">Customer Name:</span><span class="detail-value" id="detCustomer">-</span></div>
+                <div class="detail-row"><span class="detail-label">Email Address:</span><span class="detail-value" id="detEmail">-</span></div>
+                <div class="detail-row"><span class="detail-label">Vehicle & Type:</span><span class="detail-value" id="detVehicle">-</span></div>
+                <div class="detail-row"><span class="detail-label">Service Type:</span><span class="detail-value" id="detService">-</span></div>
+                <div class="detail-row"><span class="detail-label">Schedule:</span><span class="detail-value" id="detSchedule" style="color: var(--accent-amber);">-</span></div>
+                <div class="detail-row"><span class="detail-label">Assigned Bay:</span><span class="detail-value" id="detBay">-</span></div>
+                <div class="detail-row"><span class="detail-label">Current Status:</span><span class="detail-value" id="detStatus">-</span></div>
+                <div class="detail-row" id="detArrivedRow" style="display: none;"><span class="detail-label">Checked In:</span><span class="detail-value" id="detArrived" style="color: var(--accent-green);">-</span></div>
+                <div class="detail-row" id="detHoldRow" style="display: none;"><span class="detail-label"><i class="fa-solid fa-hand"></i> Bay Held:</span><span class="detail-value" id="detHold" style="color: var(--accent-red); word-break: normal; overflow-wrap: break-word;">-</span></div>
+                <div class="detail-row" id="detWasherRow" style="display: none;"><span class="detail-label">Washer:</span><span class="detail-value" id="detWasher" style="color: var(--accent-green);">-</span></div>
+                <div class="detail-row" id="detRecommendedRow" style="display: none;"><span class="detail-label"><i class="fa-solid fa-user-gear"></i> Will be assigned to:</span><span class="detail-value" id="detRecommended" style="color: var(--accent-amber);">-</span></div>
+                <p class="assign-note" id="detAssignNote" style="display: none;"></p>
+                <div class="detail-row"><span class="detail-label">Est. Completion:</span><span class="detail-value" id="detEstWait" style="color: var(--accent-amber);">-</span></div>
+                <div class="detail-row"><span class="detail-label">Wait before service:</span><span class="detail-value" id="detQueueWait">-</span></div>
+                <div class="detail-row"><span class="detail-label">Service duration:</span><span class="detail-value" id="detServiceMinutes">-</span></div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-direction: column;">
+                <button type="button" id="modalArrivedBtn" class="btn-secondary" style="display: none; width: 100%;"></button>
+                <button type="button" id="modalStartBtn" class="btn-primary" style="display: none; width: 100%;">Start Service Now</button>
+                <button type="button" id="modalCompleteBtn" class="btn-primary" style="display: none; width: 100%;"><i class="fa-solid fa-circle-check"></i> Mark as Complete</button>
+                <button type="button" id="modalConfirmBtn" class="btn-primary" style="display: none; width: 100%;"><i class="fa-solid fa-circle-check"></i> Confirm - Send to Ready List</button>
+                <button type="button" id="modalRejectBtn" class="btn-secondary" style="display: none; width: 100%;"><i class="fa-solid fa-rotate-left"></i> Not Actually Done - Send Back</button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-secondary" onclick="closeDetailModal()" style="flex: 1;">Close</button>
+                    <button type="button" id="modalCancelBtn" class="btn-primary btn-danger" style="display: none; flex: 1;">Cancel Booking</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WALK-IN MODAL -->
+    <div class="modal-overlay" id="walkinModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Walk-in Booking</h3>
+                <button class="close-btn" onclick="closeWalkinModal()">&times;</button>
+            </div>
+            <form id="walkinForm" onsubmit="handleWalkinSubmit(event)">
+                <div class="form-group"><label>Customer Name</label><input type="text" id="walkinName" required placeholder="e.g. John Doe"></div>
+                <div class="form-group"><label>Gmail Address</label><input type="email" id="walkinEmail" required placeholder="e.g. johndoe@gmail.com"></div>
+                <div class="form-group"><label>Plate Number</label><input type="text" id="walkinPlate" required placeholder="e.g. ABC-1234"></div>
+                <div class="form-group">
+                    <label>Car Model</label>
+                    <input type="text" id="walkinVehicleModel" list="walkinVehicleModelOptions" required maxlength="60" autocomplete="off" placeholder="e.g. Toyota Vios">
+                    <datalist id="walkinVehicleModelOptions"></datalist>
+                </div>
+                <div class="form-group">
+                    <label>Vehicle Size</label>
+                    <select id="walkinVehicleType" onchange="onWalkinVehicleTypeChanged()">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Service Type &amp; Automatic Bay Assignment</label>
+                    <select id="walkinServiceType" onchange="updateWalkinPricePreview()">
+                        <option value="">Select your vehicle size first...</option>
+                    </select>
+                </div>
+                <!-- Real price for the exact service+size combo, same
+                     catalog the Pricing page and the online booking form
+                     both read from - no separate/duplicated bay picker
+                     here either now: the service's own default_bay decides
+                     it server-side (see api_submit_booking). -->
+                <div class="form-group">
+                    <label>Price</label>
+                    <div id="walkinPricePreview" style="font-size: var(--text-md); font-weight: 800; color: var(--accent-green); padding: 8px 0;">-</div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
+                    <button type="button" class="btn-secondary" onclick="closeWalkinModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Add to Queue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    onLiveUpdate(() => {
+        loadDashboardData();
+        loadStaffRecommendation();
+        loadReadyAlert();
+        loadMyShiftReminder();
+    });
+
+    // Shows one bay's card at a time instead of all 3 side by side - the
+    // grid's data-active-bay attribute drives which .card is visible via
+    // pure CSS (see the [data-active-bay] rules in extra_style), so this
+    // never needs re-applying after loadDashboardData() repopulates the
+    // bay lists; only the tab buttons' own active state is JS-managed here.
+    function switchBayTab(scope, bayNum, btnEl) {
+        const grid = document.getElementById(scope === 'walkin' ? 'walkinBaysGrid' : 'onlineBaysGrid');
+        if (grid) grid.dataset.activeBay = String(bayNum);
+        if (btnEl) {
+            btnEl.parentElement.querySelectorAll('.bay-tab-btn').forEach(b => b.classList.toggle('active', b === btnEl));
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // Walk-in button is rendered conditionally by Jinja (role != 'customer'),
+        // so no JS toggling needed here.
+        loadDashboardData();
+        loadStaffRecommendation();
+        loadReadyAlert();
+        loadMyShiftReminder();
+    });
+
+    function handleCategoryFilterChange() { processAndRenderQueue(fullQueueCache); }
+
+    // The booking a notification pointed at (?booking=<id>), brought up
+    // once the queue has loaded.
+    let focusBookingId = takeFocusBookingId();
+
+    function showFocusedBooking(reservationId) {
+        const car = fullQueueCache.find(c => Number(c.id) === reservationId);
+        if (!car) {
+            showToast("Not in the Queue", `Booking MD57-${reservationId} is no longer in the active queue.`, "error");
+            return;
+        }
+        const scope = car.is_walkin ? 'walkin' : 'online';
+        document.getElementById('categoryDropdown').value = scope;
+        document.getElementById('searchInput').value = '';
+        processAndRenderQueue(fullQueueCache);
+        const bayNum = Number(getNormalizedBayKey(car).replace(/\D/g, ''));
+        const tabs = document.querySelectorAll(`#${scope}ContainerView .bay-tab-btn`);
+        switchBayTab(scope, bayNum, tabs[bayNum - 1]);
+        openDetailModal(reservationId);
+    }
+
+    let currentQueueCache = [];
+
+    function displayCustomerName(item) {
+        return item.customer_name || (item.is_walkin ? 'Walk-in Customer' : (item.email ? item.email.split('@')[0] : 'Online Customer'));
+    }
+    let latestStaffRecommendation = null;
+    let latestReadyCount = null;
+    let latestMyShiftReminder = null;
+
+    // Who the next car will go to (MCDA/SAW over the free washers' speed,
+    // punctuality and rating) - shown before Start; Start assigns them.
+    function loadStaffRecommendation() {
+        if (CURRENT_USER.role !== 'staff' && CURRENT_USER.role !== 'admin') return;
+        fetch('/api/recommend-staff')
+            .then(res => res.json())
+            .then(result => {
+                latestStaffRecommendation = (result.status === 'success') ? result : null;
+                renderDashboardAlerts();
+                if (document.getElementById('detailModal').classList.contains('open')
+                    && document.getElementById('modalStartBtn').style.display === 'block') showUpcomingWasher();
+            })
+            .catch(() => { latestStaffRecommendation = null; });
+    }
+
+    // Cars that finished washing move to queue_status 'ready' and drop out
+    // of this page's active-queue feed entirely (they only ever showed up
+    // on the separate /ready page) - so nothing here ever told staff a car
+    // had actually finished. This surfaces that count right where staff
+    // are already working.
+    function loadReadyAlert() {
+        if (CURRENT_USER.role !== 'staff' && CURRENT_USER.role !== 'admin') return;
+        fetch('/api/get-ready')
+            .then(res => res.json())
+            .then(result => {
+                latestReadyCount = (result.status === 'success' && Array.isArray(result.data)) ? result.data.length : null;
+                renderDashboardAlerts();
+            })
+            .catch(() => { latestReadyCount = null; });
+    }
+
+    // Forward-looking shift roster (item 26) - lets staff know they're
+    // expected in today/tomorrow right where they're already working,
+    // not just on the staff.html roster page they may not visit daily.
+    function loadMyShiftReminder() {
+        if (CURRENT_USER.role !== 'staff') { latestMyShiftReminder = null; return; }
+        fetch('/api/staff-shifts')
+            .then(res => res.json())
+            .then(result => {
+                let shifts = (result.status === 'success' && Array.isArray(result.data)) ? result.data : [];
+                let today = getTodayDateStr();
+                let tomorrow = getDateStrOffset(1);
+                let mine = shifts.filter(s => s.staff_user_id === CURRENT_USER.user_id);
+                latestMyShiftReminder = mine.find(s => s.shift_date === today) || mine.find(s => s.shift_date === tomorrow) || null;
+                if (latestMyShiftReminder) {
+                    latestMyShiftReminder.isToday = latestMyShiftReminder.shift_date === today;
+                }
+                renderDashboardAlerts();
+            })
+            .catch(() => { latestMyShiftReminder = null; });
+    }
+
+    function renderDashboardAlerts() {
+        let container = document.getElementById('dashboardAlerts');
+        if (!container) return;
+        if (CURRENT_USER.role !== 'staff' && CURRENT_USER.role !== 'admin') { container.innerHTML = ''; return; }
+
+        let alerts = [];
+
+        if (CURRENT_USER.role === 'staff' && latestMyShiftReminder) {
+            let when = latestMyShiftReminder.isToday ? 'TODAY' : 'TOMORROW';
+            let note = latestMyShiftReminder.shift_note ? ` - ${escapeHtml(latestMyShiftReminder.shift_note)}` : '';
+            alerts.push(`
+                <div class="dashboard-alert info">
+                    <span><i class="fa-solid fa-calendar-days"></i> You're scheduled to work ${when}${note}.</span>
+                </div>
+            `);
+        }
+
+        if (latestReadyCount) {
+            alerts.push(`
+                <div class="dashboard-alert info">
+                    <span><i class="fa-solid fa-circle-check"></i> ${latestReadyCount} car${latestReadyCount === 1 ? '' : 's'} finished washing and ${latestReadyCount === 1 ? 'is' : 'are'} ready for pickup.</span>
+                    <a href="/ready">View Ready List &rarr;</a>
+                </div>
+            `);
+        }
+
+        // Staff marked these done, but they don't reach the customer or the
+        // Ready list until admin confirms (or sends them back).
+        if (CURRENT_USER.role === 'admin') {
+            let pending = fullQueueCache.filter(c => c.status === 'pending_confirmation');
+            if (pending.length > 0) {
+                let first = pending[0];
+                alerts.push(`
+                    <div class="dashboard-alert pending">
+                        <span><i class="fa-solid fa-magnifying-glass"></i> ${pending.length} car${pending.length === 1 ? '' : 's'} marked done by staff, awaiting your confirmation.</span>
+                        <button type="button" class="alert-link" onclick="openDetailModal(${Number(first.id)})">Review${pending.length > 1 ? ' First' : ''}</button>
+                    </div>
+                `);
+            }
+        }
+
+        // Only meaningful for the staff member the system actually picked -
+        // an admin viewing the dashboard isn't "assigned" to wash anything.
+        if (CURRENT_USER.role === 'staff' && latestStaffRecommendation && latestStaffRecommendation.recommended
+            && latestStaffRecommendation.recommended.user_id === CURRENT_USER.user_id) {
+            let nextWaiting = fullQueueCache
+                .filter(c => c.status === 'waiting')
+                .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))[0];
+
+            if (nextWaiting) {
+                let bay = nextWaiting.assigned_bay;
+                alerts.push(`
+                    <div class="dashboard-alert assignment">
+                        <span><i class="fa-solid fa-bell"></i> You're next in line - when the next car starts (${escapeHtml(nextWaiting.plate_number)}, ${escapeHtml(bay)}), it will be assigned to you.</span>
+                        <button type="button" class="alert-link" onclick="openDetailModal(${Number(nextWaiting.id)})">View Job</button>
+                    </div>
+                `);
+            }
+        }
+
+        container.innerHTML = alerts.join('');
+    }
+
+    function playChime() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch (e) {
+            console.log("Audio alert blocked.");
+        }
+    }
+
+    // A booking's slot as a timestamp (ms), or null for a walk-in.
+    function bookingTimestamp(item) {
+        const m = (item.booking_time || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!item.booking_date || !m) return null;
+        const [y, mo, d] = item.booking_date.split('-').map(Number);
+        return new Date(y, mo - 1, d, Number(m[1]) % 12 + (m[3].toUpperCase() === 'PM' ? 12 : 0), Number(m[2])).getTime();
+    }
+
+    function clockText(ms) {
+        return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    // When a waiting car should be done: a walk-in's AI estimate (from
+    // /api/get-queue - the Random Forest model on what's ahead of it in its
+    // bay), or a booking's slot plus its service length.
+    function estimatedDoneText(item) {
+        if (item.estimate) return item.estimate.estimated_finish_at
+            ? formatTimestamp(item.estimate.estimated_finish_at) + (['scheduled', 'overdue'].includes(item.estimate.status) ? ` (${item.estimate.message})` : '')
+            : item.estimate.message;
+        if (item.est_minutes) return `about ${formatMinutes(item.est_minutes)} (around ${clockText(Date.now() + item.est_minutes * 60000)})`;
+        const booked = bookingTimestamp(item);
+        if (booked) return `around ${clockText(booked + (item.duration_minutes || 20) * 60000)}`;
+        return 'Not estimated yet';
+    }
+
+    // Estimated finish time from the booking's real service duration
+    // (/api/get-queue's duration_minutes; 20 min only if it's missing).
+    function getEstimatedCompletionTimeText(bayIndex, item) {
+        if (item.estimate) return item.estimate.estimated_finish_at
+            ? clockText(parseServerDateTime(item.estimate.estimated_finish_at)) : item.estimate.message;
+        let durationPerCar = item.duration_minutes || 20;
+        let targetTimeMs = new Date().getTime();
+        let startTime = parseServerDateTime(item.started_at);
+
+        if (startTime) {
+            targetTimeMs = startTime + (durationPerCar * 60 * 1000);
+        } else {
+            targetTimeMs += ((bayIndex + 1) * durationPerCar) * 60 * 1000;
+        }
+
+        return new Date(targetTimeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+
+    // Real service/pricing catalog for the walk-in form - same data the
+    // Pricing page and the online booking form both read from (see
+    // common.js's fetchServiceCatalog), fetched once the first time the
+    // modal opens.
+    let WALKIN_SERVICE_CATALOG = null;
+
+    async function openWalkinModal() {
+        if (CURRENT_USER.role === 'customer') {
+            showToast("Restricted", "Customers are not allowed to add walk-in queues.", "error");
+            return;
+        }
+        document.getElementById('walkinModal').classList.add('open');
+        if (!WALKIN_SERVICE_CATALOG) {
+            try {
+                WALKIN_SERVICE_CATALOG = await fetchServiceCatalog();
+                populateVehicleTypeSelect('walkinVehicleType', WALKIN_SERVICE_CATALOG);
+                populateVehicleModelList('walkinVehicleModelOptions', WALKIN_SERVICE_CATALOG);
+                onWalkinVehicleTypeChanged();
+            } catch (err) {
+                showToast("Error", "Could not load services. Please try again.", "error");
+            }
+        }
+    }
+    function closeWalkinModal() { document.getElementById('walkinModal').classList.remove('open'); }
+
+    // Service list (and price preview) refreshed for whichever vehicle
+    // size is currently selected - a motorcycle service never shows up
+    // once a car size is picked, and vice versa, same filtering the online
+    // booking form uses.
+    function onWalkinVehicleTypeChanged() {
+        populateServiceSelectForVehicleType('walkinServiceType', WALKIN_SERVICE_CATALOG, document.getElementById('walkinVehicleType').value);
+        updateWalkinPricePreview();
+    }
+
+    function updateWalkinPricePreview() {
+        const priceEl = document.getElementById('walkinPricePreview');
+        if (!priceEl) return;
+        const vehicleType = document.getElementById('walkinVehicleType').value;
+        const service = findServiceInCatalog(WALKIN_SERVICE_CATALOG, document.getElementById('walkinServiceType').value);
+        priceEl.innerText = service ? formatPeso(service.prices[vehicleType]) : '-';
+    }
+
+    // A scheduled booking can be checked in on its own day, while it's
+    // still waiting (see /api/mark-arrived). Walk-ins are already here.
+    function canCheckIn(item) {
+        return item.status === 'waiting' && item.booking_date === getTodayDateStr();
+    }
+
+    // Checks a booked customer in (or undoes a mistaken check-in). From
+    // then on their bay is held for them and the no-show timer no longer
+    // applies.
+    function setArrived(item, arrived) {
+        closeDetailModal();
+        fetch('/api/mark-arrived', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reservation_id: item.id, arrived: arrived })
+        })
+        .then(res => res.json())
+        .then(result => {
+            showToast(result.status === 'success' ? (arrived ? "Checked In" : "Check-In Undone") : "Error",
+                result.message || "Could not update the check-in.", result.status === 'success' ? "success" : "error");
+            loadDashboardData();
+        })
+        .catch(() => showToast("Error", "Connection error while updating the check-in.", "error"));
+    }
+
+    function openDetailModal(reservationId) {
+        let item = fullQueueCache.find(car => Number(car.id) === Number(reservationId));
+
+        if (!item) {
+            showToast("Error", "Vehicle details not found.", "error");
+            return;
+        }
+
+        let plate = item.plate_number;
+
+        document.getElementById('modalPlateTitle').innerText = `Vehicle: ${plate}`;
+        document.getElementById('detCustomer').innerText = displayCustomerName(item);
+        document.getElementById('detEmail').innerText = item.email || 'Not Specified';
+        document.getElementById('detVehicle').innerText = describeVehicle(item);
+        document.getElementById('detService').innerText = item.service_type;
+        document.getElementById('detSchedule').innerText = item.booking_date && item.booking_time ? formatBookingWhen(item.booking_date, item.booking_time) : 'Walk-in / Immediate';
+        document.getElementById('detBay').innerText = item.assigned_bay;
+
+        let detWasherRow = document.getElementById('detWasherRow');
+        if ((item.status === 'in_progress' || item.status === 'pending_confirmation') && item.washer) {
+            detWasherRow.style.display = 'flex';
+            document.getElementById('detWasher').innerText = item.washer;
+        } else {
+            detWasherRow.style.display = 'none';
+        }
+
+        let targetBayKey = getNormalizedBayKey(item);
+        let bayItems = currentQueueCache.filter(c => getNormalizedBayKey(c) === targetBayKey);
+        let bayIndex = bayItems.indexOf(item);
+
+        let modalStartBtn = document.getElementById('modalStartBtn');
+        let modalCompleteBtn = document.getElementById('modalCompleteBtn');
+        let modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        let modalRejectBtn = document.getElementById('modalRejectBtn');
+        let modalCancelBtn = document.getElementById('modalCancelBtn');
+        let modalArrivedBtn = document.getElementById('modalArrivedBtn');
+        let detRecommendedRow = document.getElementById('detRecommendedRow');
+        let detAssignNote = document.getElementById('detAssignNote');
+        let detArrivedRow = document.getElementById('detArrivedRow');
+        let detHoldRow = document.getElementById('detHoldRow');
+
+        // Reset every action button up front - each branch below only turns
+        // on what applies to this booking's real (server-reported) status.
+        [modalStartBtn, modalCompleteBtn, modalConfirmBtn, modalRejectBtn, modalCancelBtn, modalArrivedBtn,
+            detRecommendedRow, detAssignNote, detArrivedRow, detHoldRow].forEach(el => el.style.display = 'none');
+        modalStartBtn.innerText = 'Start Service Now';
+        modalStartBtn.disabled = false;
+
+        if (item.arrived_at && item.status === 'waiting') {
+            detArrivedRow.style.display = 'flex';
+            document.getElementById('detArrived').innerText = formatTimestamp(item.arrived_at);
+        }
+
+        let isPendingStart = item.status === 'waiting';
+        let isInProgress = item.status === 'in_progress';
+        let checklistLink=document.getElementById('serviceChecklistLink');
+        if(!checklistLink){checklistLink=document.createElement('a');checklistLink.id='serviceChecklistLink';checklistLink.className='btn-secondary';modalCompleteBtn.before(checklistLink);}
+        checklistLink.textContent='Service quality checklist';
+        checklistLink.href='/service-checklist/'+item.id;
+        checklistLink.style.display=(CURRENT_USER.role==='admin'||(CURRENT_USER.role==='staff'&&item.washer_id===CURRENT_USER.user_id))&&['in_progress','pending_confirmation'].includes(item.status)?'inline-flex':'none';
+        // A job staff marked done waits here for admin to confirm (or send
+        // it back) before it reaches Ready and the customer is notified.
+        let isPendingConfirmation = item.status === 'pending_confirmation';
+
+        if (CURRENT_USER.role === 'staff' || CURRENT_USER.role === 'admin') {
+            if (isPendingStart) {
+                // The backend rejects starting a scheduled booking before its
+                // own day (see /api/start-service) - mirrored here so staff
+                // see why up front instead of clicking Start and getting a
+                // rejection toast for a booking that was never startable yet.
+                let isFutureBooking = item.booking_date && item.booking_date !== getTodayDateStr();
+                if (isFutureBooking) {
+                    document.getElementById('detStatus').innerText = `Scheduled for ${formatBookingWhen(item.booking_date)} - not startable yet`;
+                    document.getElementById('detEstWait').innerText = `${formatBookingWhen(item.booking_date)}, ${estimatedDoneText(item)}`;
+                } else {
+                    document.getElementById('detStatus').innerText = 'Pending Start';
+                    document.getElementById('detEstWait').innerText = estimatedDoneText(item);
+
+                    if (canCheckIn(item)) {
+                        modalArrivedBtn.style.display = 'block';
+                        modalArrivedBtn.innerHTML = item.arrived_at
+                            ? '<i class="fa-solid fa-rotate-left"></i> Undo Check-In'
+                            : '<i class="fa-solid fa-location-dot"></i> Customer Has Arrived - Check In';
+                        modalArrivedBtn.onclick = function() { setArrived(item, !item.arrived_at); };
+                    }
+
+                    // A booked slot is holding this bay (item.hold_reason,
+                    // from /api/get-queue - the server enforces the same
+                    // rule on Start). Staff wait; admin may override.
+                    if (item.hold_reason) {
+                        detHoldRow.style.display = 'flex';
+                        document.getElementById('detHold').innerText = item.hold_reason;
+                    }
+                    if (!item.hold_reason) {
+                        modalStartBtn.style.display = 'block';
+                        modalStartBtn.onclick = function() { startScheduledService(item); };
+                    } else if (CURRENT_USER.role === 'admin') {
+                        modalStartBtn.style.display = 'block';
+                        modalStartBtn.innerText = 'Start Anyway (Override Hold)';
+                        modalStartBtn.onclick = async function() {
+                            if (await confirmDialog(`${item.hold_reason}\n\nThis is recorded in the audit log.`,
+                                { title: `Start ${item.plate_number} anyway?`, confirmText: 'Start Anyway', danger: true })) {
+                                startScheduledService(item, true);
+                            }
+                        };
+                    }
+
+                    if (modalStartBtn.style.display === 'block') showUpcomingWasher();
+                }
+                modalCancelBtn.style.display = 'block';
+                modalCancelBtn.onclick = function() { cancelBookingFromModal(item); };
+            } else if (isInProgress) {
+                document.getElementById('detStatus').innerText = 'In Progress';
+                // For planning only - staff mark the job done when it is.
+                document.getElementById('detEstWait').innerText = `Est: ${getEstimatedCompletionTimeText(bayIndex, item)}`;
+                modalCompleteBtn.style.display = 'block';
+                modalCompleteBtn.onclick = function() { completeServiceNow(item); };
+            } else if (isPendingConfirmation) {
+                document.getElementById('detEstWait').innerText = 'Wash complete';
+                if (CURRENT_USER.role === 'admin') {
+                    document.getElementById('detStatus').innerText = 'Awaiting Your Confirmation';
+                    modalConfirmBtn.style.display = 'block';
+                    modalConfirmBtn.onclick = function() { confirmCompleteNow(item); };
+                    modalRejectBtn.style.display = 'block';
+                    modalRejectBtn.onclick = function() { rejectCompleteNow(item); };
+                } else {
+                    document.getElementById('detStatus').innerText = 'Marked Done - Awaiting Management Confirmation';
+                }
+            } else {
+                document.getElementById('detStatus').innerText = item.status || 'Unknown';
+                document.getElementById('detEstWait').innerText = 'N/A';
+            }
+        } else {
+            // Customer: can only cancel their own booking (is_mine, from
+            // /api/get-queue; /api/cancel-booking checks ownership too).
+            let isOwnBooking = !!item.is_mine;
+            if (isPendingStart) {
+                document.getElementById('detStatus').innerText = item.is_walkin ? 'Waiting' : 'Scheduled (Pending Start)';
+                document.getElementById('detEstWait').innerText = item.is_today ? estimatedDoneText(item)
+                    : `${formatBookingWhen(item.booking_date)}, ${estimatedDoneText(item)}`;
+                if (isOwnBooking) {
+                    modalCancelBtn.style.display = 'block';
+                    modalCancelBtn.onclick = function() { cancelBookingFromModal(item); };
+                }
+            } else if (isInProgress) {
+                document.getElementById('detStatus').innerText = 'In Progress';
+                document.getElementById('detEstWait').innerText = `Est: ${getEstimatedCompletionTimeText(bayIndex, item)}`;
+            } else if (isPendingConfirmation) {
+                document.getElementById('detStatus').innerText = 'Finishing Up (Final Check)';
+                document.getElementById('detEstWait').innerText = 'Almost ready!';
+            } else {
+                document.getElementById('detStatus').innerText = item.status || 'Unknown';
+                document.getElementById('detEstWait').innerText = 'N/A';
+            }
+        }
+
+        const estimate = item.estimate;
+        document.getElementById('detQueueWait').innerText = estimate
+            ? (estimate.queue_wait_minutes == null ? 'Awaiting availability' : formatMinutes(estimate.queue_wait_minutes)) : 'Not available';
+        document.getElementById('detServiceMinutes').innerText = estimate
+            ? `About ${formatMinutes(estimate.service_minutes)}` : `About ${formatMinutes(item.duration_minutes || 20)}`;
+        if (estimate) document.getElementById('detEstWait').innerText = estimatedDoneText(item);
+        document.getElementById('detailModal').classList.add('open');
+    }
+
+    function closeDetailModal() { document.getElementById('detailModal').classList.remove('open'); }
+
+    async function cancelBookingFromModal(item) {
+        if (await confirmDialog(`${item.plate_number} will leave the queue. It can be restored from the Cancelled page.`,
+            { title: 'Cancel this booking?', confirmText: 'Cancel Booking', cancelText: 'Keep Booking', danger: true })) {
+            closeDetailModal();
+            cancelBooking(item);
+        }
+    }
+
+    // Shared by the Start / Mark Complete / Confirm / Send Back buttons: POST
+    // the booking's reservation id, then toast the server's answer and
+    // refresh. The server enforces who may do what (these buttons are only
+    // shown to the roles allowed to use them).
+    function postQueueAction(url, item, successTitle, failureText, connectionErrorText, chime, extraBody) {
+        closeDetailModal();
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reservation_id: item.id, ...(extraBody || {}) })
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                if (chime) playChime();
+                showToast(successTitle, result.message, "success");
+                loadDashboardData();
+            } else {
+                showToast(result.held_for ? "Bay Held" : "Error", result.message || failureText, "error");
+                if(result.checklist_url) window.location.assign(result.checklist_url);
+                if (result.held_for) loadDashboardData();  // the hold wasn't on screen yet - show it
+            }
+        })
+        .catch(() => showToast("Error", connectionErrorText, "error"));
+    }
+
+    // overrideHold: admin starting a job despite a booked slot's hold on
+    // the bay - the server ignores it from anyone else.
+    function startScheduledService(item, overrideHold) {
+        postQueueAction('/api/start-service', item, "Started!",
+            "Could not start service.", "Connection error while starting service.", false,
+            overrideHold ? { override_hold: true } : null);
+    }
+
+    // Automated staff allocation (assignment.py on the server): the car
+    // goes to the top-ranked free washer when it starts - shown here first.
+    function showUpcomingWasher() {
+        const rec = latestStaffRecommendation;
+        const onDuty = (rec && rec.on_duty) || [];
+        const note = document.getElementById('detAssignNote');
+        note.style.display = 'none';
+        document.getElementById('detRecommendedRow').style.display = 'none';
+        if (!onDuty.length) {
+            document.getElementById('modalStartBtn').disabled = true;
+            note.textContent = rec ? 'No free washer is clocked in. Service can start once a washer is available.'
+                : 'Could not check washer availability. Refresh to retry.';
+            note.style.display = 'block';
+            return;
+        }
+        const top = rec.recommended;
+        document.getElementById('modalStartBtn').disabled = !top;
+        document.getElementById('detRecommended').innerText = top
+            ? `${top.name} (${top.has_history ? 'top available' : 'available - rotation pick'})`
+            : 'All clocked-in washers are busy. Wait for a washer to become available.';
+        document.getElementById('detRecommendedRow').style.display = 'flex';
+    }
+
+    // Staff mark a job complete themselves, whenever it's actually done -
+    // completed_at is a real event, which the wait-time model's retraining,
+    // its MAE/RMSE tracking and per-staff speed metrics all depend on. A
+    // staff member's "done" lands in pending_confirmation until admin
+    // confirms (or sends it back); admin completing a job goes straight to
+    // Ready - the server makes that call, the toast just reflects it.
+    function completeServiceNow(item) {
+        postQueueAction('/api/complete-service', item, CURRENT_USER.role === 'admin' ? "Completed!" : "Marked Done",
+            "Could not mark service as complete.", "Connection error while completing service.", true);
+    }
+
+    function confirmCompleteNow(item) {
+        postQueueAction('/api/confirm-complete', item, "Confirmed!",
+            "Could not confirm completion.", "Connection error while confirming completion.", true);
+    }
+
+    async function rejectCompleteNow(item) {
+        if (!(await confirmDialog('Staff will need to mark it complete again.',
+            { title: `Send ${item.plate_number} back to In Progress?`, confirmText: 'Send Back' }))) return;
+        postQueueAction('/api/reject-complete', item, "Sent Back",
+            "Could not send service back.", "Connection error while sending service back.");
+    }
+
+    function handleWalkinSubmit(e) {
+        e.preventDefault();
+        if (CURRENT_USER.role === 'customer') {
+            showToast("Restricted", "Action not allowed.", "error");
+            return;
+        }
+
+        let name = document.getElementById('walkinName').value.trim();
+        let email = document.getElementById('walkinEmail').value.trim();
+        let plate = document.getElementById('walkinPlate').value.trim().toUpperCase();
+        let vehicleType = document.getElementById('walkinVehicleType').value;
+        let service = findServiceInCatalog(WALKIN_SERVICE_CATALOG, document.getElementById('walkinServiceType').value);
+
+        if (!plate) return;
+        if (!service) {
+            showToast("Required", "Please select a service.", "error");
+            return;
+        }
+
+        fetch('/api/submit-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customer_name: name,
+                email: email,
+                plate_number: plate,
+                vehicle_type: vehicleType,
+                vehicle_model: document.getElementById('walkinVehicleModel').value.trim(),
+                service_id: service.service_id,
+                service_type: service.name,
+                booking_source: 'Walk-in Customer'
+                // assigned_bay deliberately omitted - the server assigns
+                // it from the service's own default_bay (see
+                // api_submit_booking), not a manual picker anymore.
+            })
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                closeWalkinModal();
+                document.getElementById('walkinForm').reset();
+                onWalkinVehicleTypeChanged(); // re-sync the service dropdown/price preview to the reset vehicle size
+                showToast("Success", `Walk-in vehicle ${plate} added successfully! Queue #${result.queue_number}`, "success");
+                loadDashboardData();
+            } else {
+                showToast("Error", result.message || "Could not add walk-in.", "error");
+            }
+        })
+        .catch(() => showToast("Error", "Network error. Please try again.", "error"));
+    }
+
+    function exportQueueCSV() {
+        if (!currentQueueCache || currentQueueCache.length === 0) {
+            showToast("Warning", "No active queue data available.", "warning");
+            return;
+        }
+        downloadCSV(`md57_live_queue_${getTodayDateStr()}.csv`,
+            ['Customer Name', 'Email', 'Plate Number', 'Car Model', 'Vehicle Type', 'Service Type', 'Schedule', 'Type', 'Assigned Bay'],
+            currentQueueCache.map(item => [
+                displayCustomerName(item),
+                item.email || 'N/A',
+                item.plate_number,
+                item.vehicle_model || '',
+                item.vehicle_type || 'Vehicle',
+                item.service_type,
+                item.booking_date && item.booking_time ? `${item.booking_date} ${item.booking_time}` : 'N/A',
+                item.is_walkin ? 'Walk-in' : 'Online Booking',
+                item.assigned_bay,
+            ]));
+        showToast("Exported", "Queue successfully exported to CSV.", "success");
+    }
+
+    function cancelBooking(item) {
+        const plateNumber = item.plate_number;
+        fetch('/api/cancel-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reservation_id: item.id })
+        })
+        .then(res => res.json())
+        .then(result => {
+            // A refused cancel (e.g. not the caller's booking) gets an error
+            // toast, never the "Cancelled" one.
+            if (result.status === 'success') {
+                showToast("Cancelled", result.message || `Booking for vehicle ${plateNumber} cancelled.`, "error");
+            } else {
+                showToast("Error", result.message || `Could not cancel booking for vehicle ${plateNumber}.`, "error");
+            }
+            loadDashboardData();
+        })
+        .catch(() => {
+            showToast("Error", "Could not cancel booking. Please try again.", "error");
+        });
+    }
+
+    // The numbers are for today - bookings for a later day are listed apart.
+    // In queue today: cars waiting today or being washed, in this view.
+    // Second number: the longest AI wait estimate among today's walk-ins,
+    // or (online view) the next booking still to come today. Bays washing:
+    // bays with a car in them now, whichever view.
+    function updateStatistics(viewList, allCars) {
+        const today = viewList.filter(c => c.is_today);
+        setCount(document.getElementById('stat-active-count'), today.length);
+        const waiting = today.filter(c => c.status === 'waiting');
+        const estEl = document.getElementById('stat-est-wait');
+        const estLabel = document.getElementById('stat-est-label');
+        if (document.getElementById('categoryDropdown').value === 'walkin') {
+            const available = waiting.map(c => c.estimate ? c.estimate.total_minutes : c.est_minutes).filter(v => v != null);
+            estLabel.innerText = 'Longest time until finished';
+            estEl.innerText = available.length && available.length === waiting.length ? formatMinutes(Math.max(...available))
+                : waiting.length ? 'Awaiting availability' : 'None waiting';
+        } else {
+            const times = waiting.map(bookingTimestamp).filter(Boolean).sort((a, b) => a - b);
+            estLabel.innerText = 'Next booking';
+            estEl.innerText = times.length ? clockText(times[0]) : 'None today';
+        }
+        const washing = new Set(allCars.filter(c => c.status === 'in_progress' || c.status === 'pending_confirmation').map(getNormalizedBayKey));
+        document.getElementById('stat-bay-occupancy').innerText = `${washing.size} / 3`;
+    }
+
+    function filterQueueTables() { processAndRenderQueue(fullQueueCache); }
+
+    function loadDashboardData() {
+        fetch('/api/get-queue')
+            .then(res => {
+                if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(result => {
+                if (result.status !== 'success') {
+                    throw new Error(result.message || 'Failed to load queue data.');
+                }
+                // Every row is a distinct reservation - never de-duplicated by
+                // plate (a customer sees other customers' plates masked, so two
+                // different cars can legitimately share "*****234").
+                result.data.forEach(car => {
+                    car.assigned_bay = getNormalizedBayKey(car);
+                    car.is_walkin = (car.booking_source || '').toLowerCase().includes('walk');
+                });
+                processAndRenderQueue(result.data);
+                if (focusBookingId) {
+                    const reservationId = focusBookingId;
+                    focusBookingId = null;
+                    showFocusedBooking(reservationId);
+                }
+            })
+            .catch(e => {
+                console.error("Error fetching queue from API:", e);
+                showToast("Couldn't Load Queue", e.message || "Could not reach the server. The list below may be out of date.", "error");
+                processAndRenderQueue([]);
+            });
+
+        // "Done Today" is the real count of jobs finished today - the same
+        // /api/admin/metrics figure as Home's numbers.
+        if (CURRENT_USER.role === 'admin' || CURRENT_USER.role === 'staff') {
+            fetch('/api/admin/metrics')
+                .then(res => res.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        setCount(document.getElementById('stat-completed-today'), result.completed_today);
+                    }
+                })
+                .catch(() => {});
+        }
+    }
+
+    // LIVE SERVICE panel - what's physically at each bay right now (a job
+    // actually in_progress, or done and awaiting admin confirmation),
+    // clearly separate from the QUEUE list below it (who's still waiting
+    // their turn - see renderWaitingBays, which only lists 'waiting'
+    // items). Computed from the *unfiltered*
+    // queue, not the search/walk-in/online view currently on screen - a
+    // bay's live job is the same real vehicle no matter which of the two
+    // filtered views you're looking at (they're the same 3 physical bays,
+    // see the page subtitle).
+    function renderBayWasherIndicators(fullQueueData) {
+        let byBay = { "Bay #1": [], "Bay #2": [], "Bay #3": [] };
+        fullQueueData.forEach(item => {
+            if (item.status !== 'in_progress' && item.status !== 'pending_confirmation') return;
+            let bayKey = getNormalizedBayKey(item);
+            if (!byBay[bayKey]) return;
+            byBay[bayKey].push(item);
+        });
+
+        [['1', 'Bay #1'], ['2', 'Bay #2'], ['3', 'Bay #3']].forEach(([num, bayKey]) => {
+            let entries = byBay[bayKey].map(item => {
+                    let plate = item.plate_number;
+                    let isPending = item.status === 'pending_confirmation';
+                    let statusLabel = isPending ? 'Awaiting Confirmation' : 'In Progress';
+                    let washerBit = item.washer ? ` &bull; <i class="fa-solid fa-user-gear"></i> ${escapeHtml(item.washer)}` : '';
+                    return { key: item.id, html: `
+                        <div class="live-service-item${isPending ? ' pending-confirmation' : ''}" onclick="openDetailModal(${Number(item.id)})">
+                            <div class="live-service-item-top">
+                                <span>${escapeHtml(plate)}</span>
+                                <span class="badge-status ${isPending ? 'status-review' : 'status-cleaning'}">${statusLabel}</span>
+                            </div>
+                            <div class="live-service-item-details"><i class="fa-solid fa-car"></i> ${escapeHtml(item.service_type || '')}${washerBit}</div>
+                        </div>
+                    ` };
+            });
+
+            // renderAnimatedList (motion.js): a car entering or leaving the
+            // bay slides in/out; an unchanged one doesn't move.
+            ['washer-bay-' + num, 'washer-online-bay-' + num].forEach(elId => {
+                renderAnimatedList(document.getElementById(elId), entries,
+                    '<div class="live-service-empty"><i class="fa-solid fa-mug-hot"></i> No vehicle currently in service</div>');
+            });
+        });
+    }
+
+    let fullQueueCache = [];
+
+    function processAndRenderQueue(finalQueueData) {
+        // Where every car's card is before this render - see settleMotion.
+        const before = rectsByKey(document.body);
+        renderBayWasherIndicators(finalQueueData);
+        fullQueueCache = finalQueueData;
+        renderDashboardAlerts();
+
+        let searchQuery = document.getElementById('searchInput').value.toLowerCase();
+        let filteredQueue = finalQueueData;
+
+        if (searchQuery) {
+            // A scanned/pasted booking ID ("md57-123") is an exact lookup,
+            // not a substring search - a plain text search doesn't use this
+            // form, so it can't collide with a real plate/service/name query.
+            if (searchQuery.startsWith('md57-')) {
+                filteredQueue = finalQueueData.filter(car => `md57-${car.id}` === searchQuery);
+            } else {
+                filteredQueue = finalQueueData.filter(car => {
+                    let p = car.plate_number.toLowerCase();
+                    let custName = displayCustomerName(car).toLowerCase();
+                    return p.includes(searchQuery) ||
+                           (car.service_type && car.service_type.toLowerCase().includes(searchQuery)) ||
+                           custName.includes(searchQuery);
+                });
+            }
+        }
+
+        currentQueueCache = filteredQueue;
+
+        // Customers don't see the online/walk-in toggle (it's hidden - see
+        // the template) - instead of leaving it stuck on whatever it
+        // defaulted to, point it at whichever view actually contains their
+        // own booking, so a walk-in customer still sees themselves without
+        // having to know that distinction exists.
+        if (CURRENT_USER.role === 'customer') {
+            const mine = finalQueueData.filter(car => car.is_mine);
+            const myBooking = mine.find(car => car.is_today) || mine[0];
+            if (myBooking) {
+                const scope = myBooking.is_walkin ? 'walkin' : 'online';
+                document.getElementById('categoryDropdown').value = scope;
+                // Open on their bay once; after that the tab is theirs to change.
+                if (!customerBayShown) {
+                    customerBayShown = true;
+                    const bayNum = Number(getNormalizedBayKey(myBooking).replace(/\D/g, ''));
+                    switchBayTab(scope, bayNum, document.querySelectorAll(`#${scope}ContainerView .bay-tab-btn`)[bayNum - 1]);
+                }
+            }
+            renderMyCars(mine);
+        }
+
+        let selectedCategory = document.getElementById('categoryDropdown').value;
+
+        let walkinList = filteredQueue.filter(car => car.is_walkin);
+        let onlineList = filteredQueue.filter(car => !car.is_walkin);
+
+        if (selectedCategory === 'walkin') {
+            document.getElementById('walkinContainerView').style.display = 'block';
+            document.getElementById('onlineContainerView').style.display = 'none';
+            renderWaitingBays(walkinList, 'walkin');
+            updateStatistics(walkinList, finalQueueData);
+        } else {
+            document.getElementById('walkinContainerView').style.display = 'none';
+            document.getElementById('onlineContainerView').style.display = 'block';
+            renderWaitingBays(onlineList, 'online');
+            updateStatistics(onlineList, finalQueueData);
+        }
+        settleMotion(before);
+    }
+
+    // After a render: a car that went from a bay's queue into its Live
+    // Service panel (it was started) travels there instead of one card
+    // leaving and another arriving; a status badge that changed (Arrived,
+    // In Progress, Awaiting Confirmation...) rings once.
+    const lastStatus = new Map();
+    function settleMotion(before) {
+        document.querySelectorAll('.live-service-item[data-key]').forEach(el => {
+            const was = before.get(el.dataset.key);
+            if (!was || was.el.classList.contains('live-service-item') || !el.getBoundingClientRect().width) return;
+            document.querySelectorAll(`.queue-item-card.list-leave[data-key="${CSS.escape(el.dataset.key)}"]`).forEach(ghost => ghost.remove());
+            moveFrom(el, was.rect);
+        });
+        document.querySelectorAll('.queue-item-card[data-key]:not(.list-leave), .live-service-item[data-key]').forEach(el => {
+            const badge = el.querySelector('.badge-status');
+            if (!badge) return;
+            const status = badge.textContent.trim();
+            const previous = lastStatus.get(el.dataset.key);
+            if (previous !== undefined && previous !== status && !MD57_REDUCED_MOTION) {
+                badge.classList.add('badge-pulse');
+                badge.addEventListener('animationend', () => badge.classList.remove('badge-pulse'), { once: true });
+            }
+            lastStatus.set(el.dataset.key, status);
+        });
+    }
+
+    let customerBayShown = false;
+
+    // "You're 3rd in line" - one line per car of the customer's in the
+    // queue (being washed, waiting today, or booked for a later day).
+    function renderMyCars(mine) {
+        const box = document.getElementById('myCarCard');
+        if (!box) return;
+        const order = car => car.status === 'waiting' ? (car.is_today ? 1 : 2) : 0;
+        box.innerHTML = mine.slice().sort((a, b) => order(a) - order(b) || (bookingTimestamp(a) || 0) - (bookingTimestamp(b) || 0)).map(car => {
+            const where = `${escapeHtml(car.assigned_bay)} · ${escapeHtml(car.service_type)}`;
+            let icon, title, sub;
+            if (car.status === 'in_progress') {
+                icon = 'fa-soap'; title = `Your car ${escapeHtml(car.plate_number)} is being washed`;
+                sub = `${where}${car.washer ? ` · ${escapeHtml(car.washer)}` : ''} · done ${escapeHtml(getEstimatedCompletionTimeText(0, car))}`;
+            } else if (car.status === 'pending_confirmation') {
+                icon = 'fa-clipboard-check'; title = 'Final check - almost ready'; sub = where;
+            } else if (!car.is_today) {
+                icon = 'fa-calendar-check'; title = `Booked for ${escapeHtml(formatBookingWhen(car.booking_date, car.booking_time))}`; sub = where;
+            } else if (car.is_walkin) {
+                icon = 'fa-list-ol';
+                title = car.cars_ahead ? `You're ${ordinal(car.cars_ahead + 1)} in line` : "You're next in line";
+                sub = `${where}${car.est_minutes ? ` · done in about ${formatMinutes(car.est_minutes)}` : ''}`;
+            } else {
+                icon = 'fa-calendar-day'; title = `Your booking today at ${escapeHtml(formatBookingWhen(null, car.booking_time))}`;
+                sub = car.arrived_at ? `${where} · checked in` : `${where} · please arrive on time - it's released 30 minutes after if you haven't checked in`;
+            }
+            return `<button type="button" class="my-car-item" onclick="showFocusedBooking(${Number(car.id)})">
+                <i class="fa-solid ${icon}" aria-hidden="true"></i>
+                <span class="my-car-text"><span class="my-car-title">${title}</span><span class="my-car-sub">${sub}</span></span>
+            </button>`;
+        }).join('');
+    }
+
+    // QUEUE lists - one renderer for both views (walk-in and online); they
+    // differ only in element ids, the type badge, and whether the booked
+    // schedule is shown. Only cars still waiting their turn are listed - a
+    // car in_progress or awaiting admin confirmation is in the LIVE SERVICE
+    // panel instead (see renderBayWasherIndicators).
+    function renderWaitingBays(queueData, view) {
+        const isOnline = view === 'online';
+        const idPart = isOnline ? 'online-bay' : 'bay';
+        const buckets = { "Bay #1": [], "Bay #2": [], "Bay #3": [] };
+        queueData.filter(item => item.status === 'waiting')
+            .forEach(item => buckets[getNormalizedBayKey(item)].push(item));
+        // Bookings in the order they'll be served - by their time; walk-ins
+        // stay first come, first served (the server's order).
+        const bySlot = (a, b) => (bookingTimestamp(a) || 0) - (bookingTimestamp(b) || 0);
+
+        const row = (item, position) => {
+            const typeBadgeHtml = isOnline
+                ? `<span class="badge-type badge-online">Online</span>`
+                : `<span class="badge-type badge-walkin">Walk-in</span>`;
+            const mineBadgeHtml = item.is_mine ? `<span class="badge-mine">Your car</span>` : '';
+            const scheduleHtml = isOnline
+                ? `<i class="fa-solid fa-calendar-days"></i> ${escapeHtml(item.booking_date && item.booking_time ? formatBookingWhen(item.booking_date, item.booking_time) : 'Scheduled')} &bull; `
+                : '';
+            const estimateHtml = item.estimate
+                ? `<div class="queue-timing">${serviceEstimateLines(item.estimate).map(line => `<div>${escapeHtml(line)}</div>`).join('')}</div>`
+                : !isOnline && item.est_minutes
+                ? `<div class="queue-timing">Estimated time until finished: ${formatMinutes(item.est_minutes)}</div>`
+                : '';
+            const statusBadgeHtml = item.arrived_at
+                ? `<span class="badge-status status-cleaning"><i class="fa-solid fa-location-dot"></i> Arrived</span>`
+                : item.hold_reason
+                    ? `<span class="badge-status status-review" title="${escapeHtml(item.hold_reason)}"><i class="fa-solid fa-hand"></i> Bay Held</span>`
+                    : isOnline
+                        ? `<span class="badge-status status-scheduled">Scheduled</span>`
+                        : `<span class="badge-status status-waiting">Pending Start</span>`;
+            const id = Number(item.id);
+            return { key: item.id, html: `
+                <div class="queue-item-card${item.is_mine ? ' is-mine' : ''}${item.is_today ? '' : ' is-later'}" role="button" tabindex="0"
+                     onclick="openDetailModal(${id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetailModal(${id}); }">
+                    <div class="queue-item-info">
+                        <div class="queue-item-title">
+                            <span>${position ? `#${position} • ` : ''}${escapeHtml(item.plate_number)}</span> ${typeBadgeHtml} ${mineBadgeHtml}
+                        </div>
+                        <div class="queue-item-details">${scheduleHtml}<i class="fa-solid fa-user"></i> ${escapeHtml(displayCustomerName(item))} &bull; <i class="fa-solid fa-car"></i> ${escapeHtml(item.service_type)}</div>
+                        ${estimateHtml}
+                    </div>
+                    <div class="queue-item-meta">${statusBadgeHtml}</div>
+                    <i class="fa-solid fa-chevron-right queue-item-chevron" aria-hidden="true"></i>
+                </div>
+            ` };
+        };
+
+        ["Bay #1", "Bay #2", "Bay #3"].forEach((bayKey, i) => {
+            const today = buckets[bayKey].filter(c => c.is_today);
+            const later = buckets[bayKey].filter(c => !c.is_today).sort(bySlot);
+            if (isOnline) today.sort(bySlot);
+
+            const entries = today.map((item, index) => row(item, index + 1));
+            if (later.length) {
+                if (!today.length) entries.push({ key: 'today-empty', html: `<div class="queue-empty-today">No cars waiting today</div>` });
+                entries.push({ key: 'later-label', html: `<div class="queue-later-label">Later days · ${later.length}</div>` });
+                later.forEach(item => entries.push(row(item, null)));
+            }
+
+            const container = document.getElementById(`list-${idPart}-${i + 1}`);
+            // Cards slide in when a booking joins this bay's queue and out
+            // when it starts, is cancelled or moves on.
+            renderAnimatedList(container, entries,
+                `<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: var(--text-xs);">No vehicles ${isOnline ? 'scheduled ' : ''}in ${bayKey}</div>`);
+
+            const countElement = document.getElementById(`count-${idPart}-${i + 1}`);
+            if (countElement) countElement.innerText = `${today.length} Waiting${later.length ? ` · ${later.length} later` : ''}`;
+        });
+    }
+</script>
+{% endblock %}

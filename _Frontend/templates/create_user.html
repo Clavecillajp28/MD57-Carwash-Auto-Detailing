@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block page_comment %}Accounts{% endblock %}
+{% block title %}MD57 - Employee Accounts{% endblock %}
+{% block extra_style %}
+.main-container { padding:32px 16px; display:flex; flex-direction:column; align-items:center; gap:24px; }
+.card { width:100%; max-width:780px; padding:20px; border-top:1px solid var(--edge); }
+.card h2 { margin:0 0 12px; }
+.subtitle, .account-meta { color:var(--text-muted); font-size:var(--text-sm); overflow-wrap:anywhere; }
+.account-row { padding:16px 0; border-bottom:1px solid var(--border-color); }
+.account-fields { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:end; }
+.account-fields label { flex:1 1 180px; min-width:0; }
+.account-fields input, .account-fields select { width:100%; margin-top:4px; }
+#invitationForm label { display:block; margin:14px 0; }
+#invitationForm input, #invitationForm select { display:block; width:100%; margin-top:5px; }
+@media (max-width:480px) { .card { padding:14px; } .account-fields button { flex:1 1 130px; } }
+{% endblock %}
+{% block content %}
+<section class="card">
+    <h2>Invite an employee</h2>
+    <p class="subtitle">Each person gets their own account. The invitation expires after 48 hours; they choose a private password. Only the owner manages employee access.</p>
+    <form id="invitationForm">
+        <label for="fullname">Person's full name<input id="fullname" maxlength="120" autocomplete="name" required></label>
+        <label for="email">Personal email address<input id="email" type="email" maxlength="254" autocomplete="email" required></label>
+        <label for="role">Account role<select id="role"><option value="staff">Staff / Washer</option><option value="admin">Manager</option><option value="owner">Owner</option></select></label>
+        <p id="roleSpecBox" class="subtitle"></p>
+        <button class="btn-primary" type="submit">Send invitation</button>
+    </form>
+    <p id="responseMsg" role="status"></p>
+</section>
+<section class="card">
+    <h2>Employee accounts</h2>
+    <p class="subtitle">Existing names are preserved. Add each person's email to send password recovery. Changing access signs them out; their bookings, attendance and pickup history remain.</p>
+    <div id="accountsList" data-skeleton="rows:4x2"></div>
+</section>
+<section class="card">
+    <h2>Invitations and recovery</h2>
+    <p class="subtitle">Resending replaces the old link. Revoke any unused invitation that is no longer needed.</p>
+    <div id="invitationsList"></div>
+</section>
+<section class="card">
+    <h2>Backup</h2>
+    <p class="subtitle">Download the system's records and keep a copy in a safe location.</p>
+    <a href="/api/admin/backup" class="btn-secondary" download>Download backup</a>
+</section>
+{% endblock %}
+{% block extra_script %}
+<script>
+const ROLE_NAMES = {owner:'Owner', admin:'Manager', staff:'Staff / Washer'};
+const ROLE_SPECS = {
+    owner:'Highest access: manages employee permissions, system settings, prices, services and backups, plus all management duties.',
+    admin:'Creates bookings, runs the queue, confirms completed work and pickups, manages attendance and views analytics.',
+    staff:'Views work, adds walk-ins, starts jobs, requests clock-in and submits finished work for manager confirmation.'
+};
+let accounts=new Map();
+function renderRoleSpec() { document.getElementById('roleSpecBox').textContent=ROLE_SPECS[document.getElementById('role').value]; }
+async function postAccount(url,body={}) {
+    const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await response.json();
+    if (!response.ok) throw new Error(data.message || 'Could not update the account.');
+    return data;
+}
+async function loadAccounts() {
+    try {
+        const response=await fetch('/api/admin/users'), data=await response.json();
+        if (!response.ok) throw new Error(data.message);
+        accounts=new Map(data.data.map(u=>[u.user_id,u]));
+        document.getElementById('accountsList').innerHTML=data.data.map(u=>`
+            <div class="account-row">
+                <strong>${escapeHtml(u.name)}${u.is_me?' (you)':''}</strong>
+                <div class="account-meta">${escapeHtml(u.username)} - ${ROLE_NAMES[u.role]}${u.retired?' - retired shared account':u.disabled?' - disabled':''}</div>
+                ${u.retired?'':`<div class="account-fields">
+                    <label for="contact-${u.user_id}">Personal email<input type="email" id="contact-${u.user_id}" value="${escapeHtml(u.email)}" maxlength="254"></label>
+                    <button class="btn-secondary" onclick="saveContact(${u.user_id})">Save email</button>
+                    <button class="btn-secondary" onclick="sendRecovery(${u.user_id})" ${u.disabled?'disabled':''}>Send password recovery</button>
+                </div><div class="account-fields">
+                    <label for="role-${u.user_id}">Role<select id="role-${u.user_id}">${Object.entries(ROLE_NAMES).map(([value,label])=>`<option value="${value}" ${u.role===value?'selected':''}>${label}</option>`).join('')}</select></label>
+                    <button class="btn-secondary" onclick="saveRole(${u.user_id})">Change role</button>
+                    ${u.is_me?'':`<button class="${u.disabled?'btn-secondary':'btn-danger'}" onclick="setAccountDisabled(${u.user_id})">${u.disabled?'Enable':'Disable'}</button>`}
+                </div>`}
+            </div>`).join('');
+        document.getElementById('invitationsList').innerHTML=data.invitations.map(i=>{
+            const state=i.used_at?'accepted':i.revoked_at?'revoked':new Date(i.expires_at.replace(' ','T'))<=new Date()?'expired':'pending';
+            return `<div class="account-row"><strong>${escapeHtml(i.fullname)}</strong>
+                <div class="account-meta">${escapeHtml(i.email)} - ${ROLE_NAMES[i.role]} - ${state} - expires ${escapeHtml(i.expires_at)}</div>
+                ${i.used_at?'':`<div class="account-fields"><button class="btn-secondary" onclick="manageInvitation(${i.invitation_id},'resend')">Resend</button>
+                ${i.revoked_at?'':`<button class="btn-danger" onclick="manageInvitation(${i.invitation_id},'revoke')">Revoke</button>`}</div>`}</div>`;
+        }).join('') || '<p class="subtitle">No invitations yet.</p>';
+    } catch(error) { document.getElementById('accountsList').textContent=error.message; }
+}
+async function changeAccount(url,body,selfChanged=false) {
+    try {
+        const data=await postAccount(url,body);
+        showToast('Account updated',data.message,'success');
+        if(selfChanged) { window.location.href='/login'; return; }
+        await loadAccounts();
+    } catch(error) { showToast('Not changed',error.message,'error'); }
+}
+async function setAccountDisabled(id) {
+    const u=accounts.get(id);
+    if (!(await confirmDialog(`${u.disabled?'Enable':'Disable'} access for ${u.name}? Existing sessions will be revoked; records stay.`,{title:'Update account access',confirmText:u.disabled?'Enable':'Disable',danger:!u.disabled}))) return;
+    await changeAccount('/api/admin/set-account-disabled',{user_id:id,disabled:!u.disabled});
+}
+async function saveRole(id) {
+    const u=accounts.get(id),role=document.getElementById('role-'+id).value;
+    if(role===u.role) return;
+    if (!(await confirmDialog(`Change ${u.name} to ${ROLE_NAMES[role]}? This changes permissions and signs them out.`,{title:'Change role',confirmText:'Change role'}))) return;
+    await changeAccount('/api/admin/set-account-role',{user_id:id,role},u.is_me);
+}
+async function saveContact(id) {
+    const u=accounts.get(id),email=document.getElementById('contact-'+id).value.trim();
+    if(email===u.email) return;
+    if (!(await confirmDialog(`Use ${email} for ${u.name}? Recovery goes to this address and existing sessions will be revoked.`,{title:'Update personal email',confirmText:'Save email'}))) return;
+    await changeAccount('/api/admin/set-account-contact',{user_id:id,email},u.is_me);
+}
+async function sendRecovery(id) {
+    const u=accounts.get(id);
+    if (!(await confirmDialog(`Send password recovery to ${u.email || 'the email on file'} for ${u.name}? This immediately signs them out.`,{title:'Send password recovery',confirmText:'Send recovery'}))) return;
+    await changeAccount('/api/admin/reset-user-password',{username:u.username},u.is_me);
+}
+async function manageInvitation(id,action) {
+    if (!(await confirmDialog(action==='resend'?'Replace the old invitation and email a new link?':'Revoke this unused invitation?',{title:'Update invitation',confirmText:action==='resend'?'Resend':'Revoke',danger:action==='revoke'}))) return;
+    await changeAccount('/api/admin/invitations/'+id+'/'+action);
+}
+document.getElementById('role').addEventListener('change',renderRoleSpec);
+document.getElementById('invitationForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),message=document.getElementById('responseMsg');
+    button.disabled=true;
+    try {
+        const data=await postAccount('/api/admin/invitations',{fullname:document.getElementById('fullname').value.trim(),email:document.getElementById('email').value.trim(),role:document.getElementById('role').value});
+        message.textContent=data.message; form.reset(); renderRoleSpec(); await loadAccounts();
+    } catch(error) { message.textContent=error.message; }
+    finally { button.disabled=false; }
+});
+document.addEventListener('DOMContentLoaded',()=>{renderRoleSpec();loadAccounts();});
+</script>
+{% endblock %}

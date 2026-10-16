@@ -1,0 +1,736 @@
+{% extends "base.html" %}
+{% block page_comment %}Manager Analytics{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Analytics{% endblock %}
+
+{% block extra_head %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block extra_style %}
+        /* Everything on this page comes from /api/analytics (analytics.py),
+           for one period at a time; the PDFs come from /api/analytics/export
+           for the same period. */
+        .main-container { flex: 1; padding: 25px 24px; width: 100%; max-width: 1320px; margin: 0 auto; }
+
+        /* ---- Header ---- */
+        /* Above the cards that follow, so the custom-period pop-up isn't drawn under them
+           (each block of the page is its own layer while its entrance animation holds). */
+        .an-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; position: relative; z-index: 5; }
+        .an-head h1 { font-family: var(--font-display); font-size: var(--text-2xl); color: var(--text-strong); margin: 0; letter-spacing: -0.01em; }
+        .an-head p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+        .an-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: relative; }
+        .an-actions a, .sec-head a { text-decoration: none; }
+        .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
+        .seg button {
+            background: transparent; border: 0; color: var(--text-muted); font: 600 var(--text-xs) var(--font-body);
+            padding: 0 12px; min-height: 36px; cursor: pointer; border-right: 1px solid var(--border);
+        }
+        .seg button:last-child { border-right: 0; }
+        .seg button.on { background: var(--surface-sunken); color: var(--text-strong); }
+        .seg button:hover:not(.on) { color: var(--text-strong); }
+        .range-pop {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 300px; max-width: calc(100vw - 32px);
+            background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg); padding: 14px; display: none;
+        }
+        .range-pop.open { display: block; }
+        .range-pop .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .range-pop label { display: block; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+        .range-pop input { width: 100%; }
+        .range-pop .actions { display: flex; justify-content: flex-end; gap: 8px; }
+        .range-error { color: var(--danger); font-size: var(--text-xs); margin: 0 0 8px; min-height: 1em; }
+        .period-note { margin: -8px 0 18px; font-size: var(--text-xs); color: var(--text-muted); display: flex; gap: 6px; align-items: baseline; }
+        .period-note:empty { display: none; }
+
+        /* ---- KPI row ---- */
+        .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 26px; }
+        .kpi { background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; min-width: 0; }
+        .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+        .kpi-value { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; color: var(--text-strong); margin: 6px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kpi-foot { font-size: var(--text-xs); color: var(--text-muted); }
+        .kpi-foot .better { color: var(--success); } .kpi-foot .worse { color: var(--danger); }
+        .kpis .skeleton-card { height: 96px; }
+
+        /* ---- Section tabs ---- */
+        .an-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
+        .an-tabs::-webkit-scrollbar { display: none; }
+        .an-tabs button {
+            background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+            padding: 10px 14px; color: var(--text-muted); font: 600 var(--text-sm) var(--font-body); cursor: pointer; white-space: nowrap;
+        }
+        .an-tabs button:hover { color: var(--text-strong); }
+        .an-tabs button.on { color: var(--text-strong); border-bottom-color: var(--accent); }
+        .an-section { display: none; }
+        .an-section.on { display: block; }
+        .sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .sec-head h2 { font-size: var(--text-lg); color: var(--text-strong); margin: 0; }
+        .sec-head p { margin: 3px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+
+        /* ---- Cards ---- */
+        .an-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .an-card {
+            background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; min-width: 0; display: flex; flex-direction: column;
+            transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), border-color var(--fast) var(--ease);
+        }
+        /* The card under the pointer lifts a little (mouse only - a tap would leave it raised). */
+        @media (hover: hover) and (pointer: fine) {
+            .an-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+        }
+        @media (prefers-reduced-motion: reduce) { .an-card:hover { transform: none; } }
+
+        /* ---- Chart entrances: once per period, the first time each tab is
+           shown (.an-section.enter, set by enterSection). Rows draw in left
+           to right one after another; busy-hour rows fade in Mon -> Sun. The
+           canvas charts draw left to right in script (revealChart). The
+           negative insets keep the dots at a track's ends whole. ---- */
+        @keyframes reveal-x { from { clip-path: inset(-8px 100% -8px -8px); } to { clip-path: inset(-8px -8px -8px -8px); } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        .an-section.enter .db-track, .an-section.enter .strip, .an-section.enter .lp-track {
+            animation: reveal-x var(--slow) var(--ease) both;
+            animation-delay: calc(var(--i, 0) * 40ms);
+        }
+        .an-section.enter .heat .cell { animation: fade-in var(--base) var(--ease) both; animation-delay: calc(var(--row, 0) * 45ms); }
+        .an-card.wide { grid-column: 1 / -1; }
+        .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+        .an-card h3 { font-size: var(--text-md); color: var(--text-strong); margin: 0; font-weight: 600; }
+        .take { margin: 4px 0 0; font-size: var(--text-sm); color: var(--text); line-height: 1.45; }
+        .icon-btn {
+            flex-shrink: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--text-muted);
+            cursor: pointer; text-decoration: none;
+        }
+        .icon-btn:hover { color: var(--text-strong); border-color: var(--border-strong); }
+        .card-body { flex: 1; min-width: 0; }
+        .chart-box { position: relative; height: 240px; }
+        .method { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; font-size: var(--text-xs); color: var(--text-muted); }
+        .method summary { cursor: pointer; font-weight: 600; list-style: none; }
+        .method summary::-webkit-details-marker { display: none; }
+        .method summary::before { content: '+ '; }
+        .method[open] summary::before { content: '\2212  '; }
+        .method p { margin: 6px 0 0; line-height: 1.5; }
+        .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--text-muted); margin-top: 10px; }
+        .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+        .empty-card { color: var(--text-muted); font-size: var(--text-sm); padding: 24px 0; text-align: center; }
+        .crew-setting { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: var(--text-xs); color: var(--text-muted); flex-wrap: wrap; }
+        .crew-setting select { width: auto; min-height: 30px; padding: 2px 8px; font-size: var(--text-sm); }
+
+        /* ---- Dumbbell (two values per row on one scale) ---- */
+        .dumbbell { display: flex; flex-direction: column; gap: 10px; }
+        .db-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr auto; align-items: center; gap: 12px; font-size: var(--text-sm); }
+        .db-label { color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .db-track { position: relative; height: 14px; }
+        .db-track::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--chart-grid); }
+        .db-link { position: absolute; top: calc(50% - 1px); height: 2px; background: var(--chart-muted); }
+        .db-dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%); }
+        .db-a { background: var(--viz-accent); box-shadow: 0 0 0 2px var(--surface-raised); }
+        .db-b { background: var(--surface-raised); border: 2px solid var(--chart-muted); }
+        .db-values { font-variant-numeric: tabular-nums; color: var(--text-strong); font-size: var(--text-xs); white-space: nowrap; min-width: 64px; text-align: right; }
+
+        /* ---- Part-to-whole strips ---- */
+        .strips { display: flex; flex-direction: column; gap: 10px; }
+        .strip-row { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 10px; font-size: var(--text-xs); color: var(--text-muted); }
+        .strip { display: flex; gap: 2px; height: 18px; border-radius: 4px; overflow: hidden; }
+        .strip i { display: block; height: 100%; min-width: 2px; }
+        .strip-keys { margin-top: 14px; display: flex; flex-direction: column; font-size: var(--text-sm); }
+        .strip-key { display: grid; grid-template-columns: 12px minmax(0, 1fr) repeat(2, auto); gap: 6px 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+        .strip-key:last-child { border-bottom: 0; }
+        .strip-key i { width: 10px; height: 10px; border-radius: 2px; }
+        .strip-key span:nth-child(2) { color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .strip-key .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); min-width: 64px; }
+        .strip-key.head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+        /* ---- Lollipops (ranked list) ---- */
+        .lollipops { display: flex; flex-direction: column; gap: 9px; }
+        .lp-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 34px; align-items: center; gap: 10px; font-size: var(--text-sm); }
+        .lp-label { color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lp-track { position: relative; height: 10px; }
+        .lp-track i { position: absolute; left: 0; top: calc(50% - 1px); height: 2px; background: var(--chart-muted); }
+        .lp-track i::after { content: ''; position: absolute; right: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--viz-accent); }
+        .lp-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+        .lp-row.rest .lp-label { color: var(--text-muted); }
+
+        /* ---- Weather tiles ---- */
+        .weather-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+        .weather-tile { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
+        .weather-tile.rain { border-color: color-mix(in srgb, var(--viz-rain) 45%, var(--border)); }
+        .wt-head { font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; }
+        .weather-tile.rain .wt-head i { color: var(--viz-rain); }
+        .wt-value { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; color: var(--text-strong); margin-top: 6px; }
+        .wt-sub { font-size: var(--text-xs); color: var(--text-muted); }
+        .wt-diff { font-size: var(--text-xs); font-weight: 600; color: var(--text-strong); margin-top: 6px; }
+        .acc-head { margin-bottom: 10px; }
+        @media (max-width: 600px) {
+            .db-row { grid-template-columns: 64px 1fr auto; gap: 8px; }
+            .strip-key { grid-template-columns: 12px minmax(0, 1fr) repeat(2, auto); gap: 4px 8px; }
+            .strip-key .num { min-width: 48px; }
+        }
+
+        /* ---- Busy-hours grid ---- */
+        .heat-wrap { overflow-x: auto; }
+        .heat { display: grid; grid-template-columns: 40px repeat(13, minmax(30px, 1fr)); gap: 3px; min-width: 470px; font-size: 11px; }
+        .heat span { color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+        .heat .row-label { justify-content: flex-start; font-weight: 600; }
+        .heat .cell { height: 30px; border-radius: 4px; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+        .heat-scale { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); color: var(--text-muted); margin-top: 10px; flex-wrap: wrap; }
+        .heat-scale b { display: inline-block; width: 120px; height: 8px; border-radius: 4px; }
+
+        /* ---- Figures, lists and tables ---- */
+        .big-figure { font-family: var(--font-display); font-size: 40px; font-weight: 600; color: var(--text-strong); line-height: 1; }
+        .big-sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 6px; }
+        .an-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+        .an-table th { text-align: left; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        .an-table td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .an-table td:first-child, .an-table td.name { color: var(--text-strong); font-weight: 600; }
+        .an-table tr:last-child td { border-bottom: 0; }
+        .an-table .num { text-align: right; }
+        .an-table td.muted, .muted { color: var(--text-muted); font-weight: 400; }
+        .table-scroll { overflow-x: auto; }
+
+        @media (max-width: 1200px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 900px) { .an-grid { grid-template-columns: minmax(0, 1fr); } }
+        @media (max-width: 768px) { .main-container { padding: 16px; } }
+        @media (max-width: 600px) {
+            .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+            .kpi { padding: 12px; }
+            .kpi-value { font-size: var(--text-lg); }
+            .an-head h1 { font-size: var(--text-xl); }
+            .an-actions, .seg { width: 100%; }
+            .seg button { flex: 1; padding: 0 6px; }
+            .an-actions > .btn-primary { width: 100%; }
+            .range-pop { left: 0; right: auto; width: 100%; max-width: none; }
+            .an-card { padding: 14px; }
+            .chart-box { height: 220px; }
+        }
+{% endblock %}
+
+{% block content %}
+<div class="an-head">
+    <div>
+        <h1>Analytics</h1>
+        <p id="periodLabel">Business performance</p>
+    </div>
+    <div class="an-actions">
+        <div class="seg" role="group" aria-label="Period">
+            <button type="button" data-days="7">7 days</button><button type="button" data-days="30" class="on">30 days</button><button type="button" data-days="90">90 days</button><button type="button" data-days="custom" aria-haspopup="true" aria-expanded="false">Custom</button>
+        </div>
+        <a class="btn-primary" id="exportAll" href="#" download><i class="fa-solid fa-file-arrow-down"></i> Export full report</a>
+        <div class="range-pop" id="rangePop" role="dialog" aria-label="Custom period">
+            <div class="row">
+                <div><label for="rangeStart">From</label><input type="date" id="rangeStart"></div>
+                <div><label for="rangeEnd">To</label><input type="date" id="rangeEnd"></div>
+            </div>
+            <p class="range-error" id="rangeError"></p>
+            <div class="actions">
+                <button type="button" class="btn-secondary btn-sm" id="rangeCancel">Cancel</button>
+                <button type="button" class="btn-primary btn-sm" id="rangeApply">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+<p class="period-note" id="periodNote"></p>
+
+<div class="kpis" id="kpis" data-skeleton="cards:6"></div>
+
+<nav class="an-tabs" role="tablist" aria-label="Analytics sections">
+    <button type="button" class="on" data-tab="demand" role="tab">Demand</button>
+    <button type="button" data-tab="operations" role="tab">Operations</button>
+    <button type="button" data-tab="customers" role="tab">Services &amp; Customers</button>
+    <button type="button" data-tab="staff" role="tab">Staff</button>
+</nav>
+
+<div id="sections">
+    {% for key, wide in [('demand', ['daily', 'heatmap']), ('operations', []), ('customers', ['returns']), ('staff', ['staff'])] %}
+    <section class="an-section{% if loop.first %} on{% endif %}" id="sec-{{ key }}" role="tabpanel">
+        <div class="sec-head">
+            <div><h2 data-sec-title></h2><p data-sec-blurb></p></div>
+            <a class="btn-secondary btn-sm" data-export-section href="#" download><i class="fa-solid fa-file-pdf"></i> <span>Export PDF</span></a>
+        </div>
+        <div class="an-grid" data-blocks data-wide="{{ wide|join(' ') }}" data-skeleton="cards:2"></div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    // ---------------------------------------------------------------- state
+    const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const MIN_SAMPLE = 5;
+    let period = { days: 30 };
+    let report = null;
+    let charts = [];
+    let loadSeq = 0;
+    const initialQuery = new URLSearchParams(location.search);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(initialQuery.get('start') || '') && /^\d{4}-\d{2}-\d{2}$/.test(initialQuery.get('end') || '')) {
+        period = { start: initialQuery.get('start'), end: initialQuery.get('end') };
+    } else if ([7, 30, 90].includes(Number(initialQuery.get('days')))) {
+        period = { days: Number(initialQuery.get('days')) };
+    }
+    // Tabs whose charts haven't made their entrance since the period loaded.
+    let pendingEntrance = new Set();
+
+    function periodQuery(p = period) {
+        const dates = p.start ? `start=${p.start}&end=${p.end}` : `days=${p.days}`;
+        return dates;
+    }
+    function exportUrl(section, block) {
+        return `/api/analytics/export?section=${section}${block ? '&block=' + block : ''}&${periodQuery()}`;
+    }
+    const pct = v => v === null || v === undefined ? '–' : `${Math.round(v)}%`;
+
+    function rememberFilters() {
+        const url = new URL(location.href);
+        ['start', 'end', 'days', 'source'].forEach(key => url.searchParams.delete(key));
+        new URLSearchParams(periodQuery()).forEach((value, key) => url.searchParams.set(key, value));
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+
+    // ---------------------------------------------------------------- loading
+    async function load({ quiet = false } = {}) {
+        const seq = ++loadSeq;
+        if (!quiet) {
+            document.getElementById('kpis').innerHTML = skeletonHtml('cards:6');
+            document.querySelectorAll('[data-blocks]').forEach(el => { el.innerHTML = skeletonHtml('cards:2'); });
+        }
+        try {
+            const res = await fetch(`/api/analytics?${periodQuery()}`);
+            const data = await res.json();
+            if (seq !== loadSeq) return;  // a newer period was picked meanwhile
+            if (data.status !== 'success') throw new Error(data.message || 'Could not load analytics.');
+            report = data;
+            rememberFilters();
+            render(quiet);
+        } catch (e) {
+            if (seq !== loadSeq) return;
+            const message = `<p class="skeleton-failed">${escapeHtml(e.message || "Couldn't load analytics.")} Refresh the page to try again.</p>`;
+            document.getElementById('kpis').innerHTML = message;
+            document.querySelectorAll('[data-blocks]').forEach(el => { el.innerHTML = ''; });
+        }
+    }
+
+    // ---------------------------------------------------------------- rendering
+    function render(quiet = false) {
+        const p = report.period;
+        let lifecycle=document.getElementById('lifecycleSummary');
+        if(!lifecycle){lifecycle=document.createElement('p');lifecycle.id='lifecycleSummary';lifecycle.className='an-note';document.querySelector('.an-actions').after(lifecycle);}
+        const timings=report.operations.lifecycle;
+        lifecycle.textContent=`Queue wait: ${timings.queue_wait??'not recorded'} min · Service duration: ${timings.service??'not recorded'} min · Pickup delay: ${timings.pickup_delay??'not recorded'} min (${timings.pickup_samples} collections). ${timings.definition}`;
+        document.getElementById('periodLabel').textContent = `Business performance · ${p.label}`;
+        const notes = [];
+        if (p.tracked_days === 0) notes.push('No records in this period.');
+        else if (p.tracked_days < p.days) notes.push(`Records start ${formatDay(p.tracked_from)} - averages use the ${p.tracked_days} days with records.`);
+        if (!p.comparable && p.tracked_days) notes.push(`"vs previous" appears once there are records for the ${p.days} days before this period.`);
+        document.getElementById('periodNote').innerHTML = notes.length ? `<i class="fa-solid fa-circle-info"></i><span>${notes.map(escapeHtml).join(' ')}</span>` : '';
+        document.getElementById('exportAll').href = exportUrl('all');
+
+        renderKpis();
+        Object.entries(report.sections).forEach(([key, meta]) => {
+            const section = document.getElementById(`sec-${key}`);
+            section.querySelector('[data-sec-title]').textContent = meta.title;
+            section.querySelector('[data-sec-blurb]').textContent = meta.blurb;
+            const btn = section.querySelector('[data-export-section]');
+            btn.href = exportUrl(key);
+            btn.querySelector('span').textContent = `Export ${meta.title} PDF`;
+            const grid = section.querySelector('[data-blocks]');
+            const wide = grid.dataset.wide.split(' ');
+            grid.innerHTML = meta.blocks.map(block => cardHtml(key, block, wide.includes(block))).join('');
+        });
+        // A new period makes its entrance (the open tab now, the others when
+        // first opened); a live refresh or a theme switch just updates.
+        pendingEntrance = new Set(quiet ? [] : Object.keys(report.sections));
+        drawAll(!quiet);
+        const open = document.querySelector('.an-section.on');
+        if (open) enterSection(open.id.replace('sec-', ''));
+    }
+
+    // Plays a tab's chart entrance once: the drawn charts sweep in left to
+    // right (revealChart), the HTML ones by CSS (.an-section.enter).
+    function enterSection(key) {
+        if (!pendingEntrance.delete(key)) return;
+        const section = document.getElementById(`sec-${key}`);
+        const inSection = charts.filter(c => section.contains(c.canvas) && c.$reveal === 0);
+        if (MD57_REDUCED_MOTION) {
+            inSection.forEach(c => { c.$reveal = undefined; c.draw(); });
+            return;
+        }
+        section.classList.add('enter');
+        inSection.forEach(c => revealChart(c));
+        clearTimeout(section._enterTimer);
+        section._enterTimer = setTimeout(() => section.classList.remove('enter'), 1400);
+    }
+
+    function formatDay(iso) {
+        const d = new Date(iso + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function renderKpis() {
+        document.getElementById('kpis').innerHTML = report.kpis.map(k => {
+            let foot;
+            if (k.change !== null && k.change !== undefined) {
+                const better = (k.change > 0 && k.better === 'up') || (k.change < 0 && k.better === 'down');
+                const arrow = k.change > 0 ? '▲' : k.change < 0 ? '▼' : '–';
+                foot = `<span class="${k.change === 0 ? '' : better ? 'better' : 'worse'}">${arrow} ${Math.abs(k.change)}%</span> vs previous ${report.period.days} days`;
+                if (k.note) foot += ` · ${escapeHtml(k.note)}`;
+            } else {
+                foot = escapeHtml(k.note || (report.period.comparable ? 'No change to show' : 'No earlier period to compare'));
+            }
+            return `<div class="kpi"><div class="kpi-label">${escapeHtml(k.label)}</div>
+                <div class="kpi-value" title="${escapeHtml(k.display)}">${escapeHtml(k.display)}</div><div class="kpi-foot">${foot}</div></div>`;
+        }).join('');
+    }
+
+    function cardHtml(section, block, wide) {
+        const meta = report.blocks[block];
+        return `<article class="an-card${wide ? ' wide' : ''}">
+            <div class="card-head">
+                <div><h3>${escapeHtml(meta.title)}</h3><p class="take">${escapeHtml(report.takeaways[block] || '')}</p></div>
+                <a class="icon-btn" href="${exportUrl(section, block)}" download title="Download this chart as a PDF" aria-label="Download ${escapeHtml(meta.title)} as a PDF"><i class="fa-solid fa-file-arrow-down"></i></a>
+            </div>
+            <div class="card-body">${BODIES[block]()}</div>
+            <details class="method"><summary>How this is measured</summary><p>${escapeHtml(meta.method)}${block === 'accuracy' ? ' ' + escapeHtml(report.operations.accuracy.evidence_note) : ''}</p></details>
+        </article>`;
+    }
+
+    const canvas = (id, height) => `<div class="chart-box"${height ? ` style="height: ${height}px"` : ''}><canvas id="${id}"></canvas></div>`;
+    const empty = text => `<p class="empty-card">${escapeHtml(text)}</p>`;
+    const table = (head, rows) => `<div class="table-scroll"><table class="an-table"><thead><tr>${head.map(([label, num]) =>
+        `<th${num ? ' class="num"' : ''}>${label}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+    const legend = items => `<div class="legend">${items.map(([label, style]) => `<span><i style="${style}"></i>${escapeHtml(label)}</span>`).join('')}</div>`;
+
+    // Dumbbell: two values per row on one scale - the gap between them is the story.
+    function dumbbell(rows, { a, b, aLabel, bLabel, unit = '' }) {
+        const max = Math.max(1, ...rows.flatMap(r => [r[a], r[b]]).filter(v => v !== null && v !== undefined)) * 1.1;
+        const at = v => `${Math.max(0, Math.min(100, (v || 0) / max * 100))}%`;
+        const fmt = v => v === null || v === undefined ? '–' : `${Number.isInteger(v) ? v : v.toFixed(1)}${unit}`;
+        return `<div class="dumbbell">${rows.map((r, i) => {
+            const lo = Math.min(r[a] || 0, r[b] || 0), hi = Math.max(r[a] || 0, r[b] || 0);
+            return `<div class="db-row" style="--i: ${i}" title=""${escapeHtml(r.label)}: ${aLabel} ${fmt(r[a])}, ${bLabel} ${fmt(r[b])}">
+                <span class="db-label">${escapeHtml(r.label)}</span>
+                <span class="db-track"><i class="db-link" style="left: ${at(lo)}; width: calc(${at(hi)} - ${at(lo)})"></i>
+                    ${r[a] !== null && r[a] !== undefined ? `<b class="db-dot db-a" style="left: ${at(r[a])}"></b>` : ''}
+                    ${r[b] !== null && r[b] !== undefined ? `<b class="db-dot db-b" style="left: ${at(r[b])}"></b>` : ''}</span>
+                <span class="db-values">${fmt(r[a])} <span class="muted">/ ${fmt(r[b])}</span></span></div>`;
+        }).join('')}</div>` + legend([[aLabel, 'background: var(--viz-accent); border-radius: 50%'], [bLabel, 'border: 2px solid var(--chart-muted); border-radius: 50%; background: transparent']]);
+    }
+
+    // Part-to-whole: one 100% strip per measure, categories in the fixed
+    // categorical order (top four, the rest as "Other"), labelled below.
+    function strips(categories, measures) {
+        const colours = ['var(--viz-cat-1)', 'var(--viz-cat-2)', 'var(--viz-cat-3)', 'var(--viz-cat-4)'];
+        const colourOf = i => categories[i].other ? 'var(--chart-muted)' : colours[i];
+        const rows = measures.map((m, i) => `<div class="strip-row" style="--i: ${i}"><span class="strip-label">${escapeHtml(m.label)}</span>
+            <span class="strip">${categories.map((cat, i) => cat[m.key] ? `<i style="width: ${cat[m.key]}%; background: ${colourOf(i)}"
+                title="${escapeHtml(cat.name)}: ${Math.round(cat[m.key])}% of ${escapeHtml(m.label.toLowerCase())}"></i>` : '').join('')}</span></div>`).join('');
+        const keys = categories.map((cat, i) => `<div class="strip-key"><i style="background: ${colourOf(i)}"></i><span>${escapeHtml(cat.name)}</span>
+            ${measures.map(m => `<span class="num">${cat[m.key] === null || cat[m.key] === undefined ? '–' : Math.round(cat[m.key]) + '%'}</span>`).join('')}</div>`).join('');
+        return `<div class="strips">${rows}</div><div class="strip-keys"><div class="strip-key head"><i></i><span></span>${measures.map(m =>
+            `<span class="num">${escapeHtml(m.label)}</span>`).join('')}</div>${keys}</div>`;
+    }
+
+    // Ranked list as lollipops - value at the dot, quieter than a wall of bars.
+    function lollipops(rows, labelOf, valueOf, extra = '') {
+        const max = Math.max(1, ...rows.map(valueOf));
+        return `<div class="lollipops">${rows.map((r, i) => `<div class="lp-row" style="--i: ${i}"><span class="lp-label">${escapeHtml(labelOf(r))}</span>
+            <span class="lp-track"><i style="width: ${valueOf(r) / max * 100}%"></i></span><span class="lp-value">${valueOf(r)}</span></div>`).join('')}${extra}</div>`;
+    }
+
+    const BODIES = {
+        daily: () => canvas('cDaily') + legend([['Cars per day', 'background: var(--viz-accent)'],
+            ['7-day average', 'background: var(--chart-muted); height: 2px; border-radius: 0'], ['Rainy day', 'background: var(--viz-rain); border-radius: 50%']]),
+        heatmap: () => `<div class="heat-wrap"><div class="heat" id="heat"></div></div><div class="heat-scale">Fewer <b id="heatScale"></b> More · average cars arriving per hour</div>`,
+        weather: () => {
+            const w = report.demand.weather;
+            if (!w.length) return empty('No weather was recorded on bookings in this period. Weather is read from OpenWeatherMap when a booking is made, which needs a WEATHER_API_KEY in the server settings.');
+            const dry = w.filter(x => x.condition !== 'Rainy');
+            const dryAvg = dry.length ? dry.reduce((s, x) => s + x.avg * x.days, 0) / dry.reduce((s, x) => s + x.days, 0) : null;
+            const icon = { Sunny: 'fa-sun', Cloudy: 'fa-cloud', Rainy: 'fa-cloud-rain' };
+            return `<div class="weather-tiles">${w.map(x => {
+                const diff = dryAvg && x.condition === 'Rainy' ? Math.round((x.avg / dryAvg - 1) * 100) : null;
+                return `<div class="weather-tile${x.condition === 'Rainy' ? ' rain' : ''}"><div class="wt-head"><i class="fa-solid ${icon[x.condition] || 'fa-cloud'}"></i> ${escapeHtml(x.condition)}</div>
+                    <div class="wt-value">${x.avg.toFixed(1)}</div><div class="wt-sub">cars a day · ${x.days} day${x.days === 1 ? '' : 's'}</div>
+                    ${diff !== null ? `<div class="wt-diff">${diff > 0 ? '+' : ''}${diff}% vs dry days</div>` : ''}</div>`;
+            }).join('')}</div>`;
+        },
+        staffing: () => {
+            const st = report.demand.staffing;
+            const options = [1, 2, 3, 4].map(n => `<option value="${n}"${n === st.crew ? ' selected' : ''}>${n}</option>`).join('');
+            const setting = CURRENT_USER.is_owner
+                ? `<div class="crew-setting"><label for="crewSelect">Staff working on one car:</label>
+                    <select id="crewSelect" onchange="saveCrew(this.value)">${options}</select></div>`
+                : `<p class="crew-setting">Staff working on one car: ${st.crew} (set by the owner)</p>`;
+            if (!st.needed.some(v => v !== null)) return empty('Not enough finished days with records to recommend staffing yet.') + setting;
+            return dumbbell(WEEKDAYS.map((day, i) => ({ label: day, needed: st.needed[i], on_duty: st.on_duty[i] })),
+                { a: 'needed', b: 'on_duty', aLabel: 'Staff needed', bLabel: 'On duty (average)' }) + setting;
+        },
+        wait: () => report.operations.wait_by_hour.some(w => w.cars) ? canvas('cWait') : empty('No started services in this period.'),
+        service_times: () => report.operations.service_times.length
+            ? dumbbell(report.operations.service_times.map(s => ({ label: `${s.service} (${s.jobs})`, actual: s.actual, standard: s.standard })),
+                { a: 'actual', b: 'standard', aLabel: 'Actual (min)', bLabel: 'Standard (min)' })
+            : empty('No finished services in this period.'),
+        cancellations: () => {
+            const list = report.operations.cancellations;
+            if (!list.length) return empty('Every booking in this period went ahead.');
+            const total = list.reduce((s, c) => s + c.count, 0);
+            const cats = list.slice(0, 4).map(c => ({ name: `${c.reason} (${c.count})`, share: c.count / total * 100 }));
+            if (list.length > 4) cats.push({ name: 'Other', other: true, share: list.slice(4).reduce((s, c) => s + c.count, 0) / total * 100 });
+            return strips(cats, [{ key: 'share', label: `All ${total}` }]);
+        },
+        accuracy: () => {
+            const a = report.operations.accuracy;
+            const validation=report.operations.model_validation;
+            const evaluation = validation?`<p>Latest chronological validation on real records: ${validation.train_samples} earlier training jobs, ${validation.test_samples} later test jobs; MAE ${validation.mae} min, RMSE ${validation.rmse} min. Training finished by ${escapeHtml(validation.train_until)}; test arrivals ${escapeHtml(validation.test_from)} through finishes ${escapeHtml(validation.test_until)}.</p>`:'';
+            if (!a.samples) return evaluation+empty('No walk-ins with a saved wait estimate in this period.');
+            return `<div class="acc-head"><div><div class="big-figure">±${a.mae} min</div>
+                <div class="big-sub">average error (MAE) · RMSE ${a.rmse} min · ${a.within_15}% within 15 min · ${a.samples} walk-in${a.samples === 1 ? '' : 's'}</div></div></div>`
+                + `<p>${escapeHtml(a.definition)} Evaluation period: ${escapeHtml(a.evaluation_from)} through ${escapeHtml(a.evaluation_until)}.</p>`
+                + (a.plotted_samples < a.samples ? `<p>Showing the newest ${a.plotted_samples} of ${a.samples} samples; metrics use all samples.</p>` : '')+evaluation+canvas('cAccuracy', 230) + legend([['Walk-in', 'background: var(--viz-accent); border-radius: 50%'],
+                    ['Exact prediction', 'background: var(--chart-muted); height: 2px; border-radius: 0']]);
+        },
+        services: () => {
+            const list = report.customers.services;
+            if (!list.length) return empty('No finished services in this period.');
+            const named = list.filter(s => !s.group).slice(0, 4);
+            const rest = list.filter(s => !named.includes(s));
+            const cats = named.map(s => ({ name: s.service, cars: s.share, work: s.work_share }));
+            if (rest.length) cats.push({ name: `Other (${rest.reduce((n, s) => n + (s.group ? s.services : 1), 0)} services)`, other: true,
+                cars: rest.reduce((n, s) => n + s.share, 0), work: rest.some(s => s.work_share === null) ? null : rest.reduce((n, s) => n + s.work_share, 0) });
+            return strips(cats, [{ key: 'cars', label: 'Cars' }, { key: 'work', label: 'Work time' }]);
+        },
+        models: () => {
+            const c = report.customers;
+            if (!c.models.length) return empty('No car models recorded on visits in this period.');
+            const extra = (c.other_models ? `<div class="lp-row rest"><span class="lp-label">+ ${c.other_models} other model${c.other_models === 1 ? '' : 's'}</span><span></span><span class="lp-value">${c.other_model_visits}</span></div>` : '')
+                + (c.unrecorded_visits ? `<div class="lp-row rest"><span class="lp-label">Model not recorded</span><span></span><span class="lp-value">${c.unrecorded_visits}</span></div>` : '');
+            return lollipops(c.models, m => m.model, m => m.visits, extra);
+        },
+        returns: () => report.customers.return_visits ? canvas('cReturns', 220) : empty('No returning vehicles in this period yet.'),
+        staff: () => report.staff.rows.length ? table(
+            [['#'], ['Staff'], ['Jobs', 1], ['Jobs / shift', 1], ['Pace', 1], ['On time', 1], ['Absences', 1], ['Rating', 1], ['MCDA score', 1]],
+            report.staff.rows.map(s => `<tr><td class="muted">${s.rank || '–'}</td><td class="name">${escapeHtml(s.name)}</td>
+                <td class="num">${s.jobs}</td><td class="num">${s.per_shift === null ? '–' : s.per_shift.toFixed(1)}</td><td class="num">${pct(s.pace)}</td>
+                <td class="num">${pct(s.on_time)}</td><td class="num">${s.absences}</td>
+                <td class="num">${s.rating !== null && s.reviews >= MIN_SAMPLE ? `${s.rating.toFixed(1)} <span class="muted">(${s.reviews})</span>` : `<span class="muted">Not enough data (${s.reviews})</span>`}</td>
+                <td class="num">${s.score !== null ? s.score.toFixed(3) : '<span class="muted">–</span>'}</td></tr>`)) : empty('No staff accounts yet.'),
+    };
+
+    // The shop setting behind "staff needed" (settings.py) - saved, then
+    // every figure is recalculated with it.
+    async function saveCrew(value) {
+        if (!CURRENT_USER.is_owner) return;
+        try {
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'crew_per_car', value: Number(value) }),
+            });
+            const data = await res.json();
+            if (data.status !== 'success') throw new Error(data.message);
+            showToast('Saved', `Staffing now assumes ${value} staff per car.`, 'success');
+            load({ quiet: true });
+        } catch (e) {
+            showToast('Not Saved', e.message || 'Could not save the setting.', 'error');
+        }
+    }
+
+    // ---------------------------------------------------------------- charts
+    // A chart's data is drawn left to right once when it makes its entrance:
+    // its plot area is clipped to chart.$reveal (0..1) of its width while
+    // revealChart runs - axes and grid are there from the start.
+    let revealOnCreate = false;
+    const revealPlugin = {
+        id: 'md57Reveal',
+        afterInit(chart) { if (revealOnCreate) chart.$reveal = 0; },
+        beforeDatasetsDraw(chart) {
+            if (chart.$reveal === undefined) return;
+            const { left, top, width, height } = chart.chartArea;
+            chart.ctx.save();
+            chart.ctx.beginPath();
+            chart.ctx.rect(left - 6, top - 6, (width + 12) * chart.$reveal, height + 12);  // room for points at the edges
+            chart.ctx.clip();
+        },
+        afterDatasetsDraw(chart) { if (chart.$reveal !== undefined) chart.ctx.restore(); },
+    };
+    if (window.Chart) Chart.register(revealPlugin);
+
+    function revealChart(chart, duration = 700) {
+        const start = performance.now();
+        (function frame(now) {
+            if (!charts.includes(chart)) return;  // redrawn meanwhile
+            const t = Math.min(1, (now - start) / duration);
+            chart.$reveal = t < 1 ? MD57_EASE(t) : undefined;
+            chart.draw();
+            if (t < 1) requestAnimationFrame(frame);
+        })(start);
+    }
+
+    function axis(extra = {}) {
+        return Object.assign({
+            grid: { color: themeColor('--chart-grid') }, border: { display: false },
+            ticks: { color: themeColor('--text-muted'), font: { size: 11 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 },
+            title: extra.titleText ? { display: true, text: extra.titleText, color: themeColor('--text-muted'), font: { size: 11 } } : undefined,
+        }, extra);
+    }
+    function baseOptions(extra = {}) {
+        return Object.assign({
+            responsive: true, maintainAspectRatio: false, animation: false,  // entrances are revealChart's
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: false }, tooltip: { padding: 10, cornerRadius: 6, boxPadding: 4 } },
+        }, extra);
+    }
+
+    function drawAll(animate = false) {
+        if (!animate) pendingEntrance.clear();
+        revealOnCreate = animate && !MD57_REDUCED_MOTION;
+        charts.splice(0).forEach(c => c.destroy());
+        drawHeat();
+        if (!window.Chart) {
+            document.querySelectorAll('.chart-box').forEach(box => {
+                box.innerHTML = '<p class="empty-card">Charts could not load. Check your connection and reload; figures and PDF exports remain available.</p>';
+            });
+            return;
+        }
+        // Charts in a hidden tab have no size - lay every section out while drawing.
+        const sections = [...document.querySelectorAll('.an-section')];
+        sections.forEach(s => { s.style.display = 'block'; });
+        const accent = themeColor('--viz-accent'), rain = themeColor('--viz-rain'), muted = themeColor('--chart-muted');
+        const d = report.demand, o = report.operations, c = report.customers;
+        const add = (id, config) => { const el = document.getElementById(id); if (el) charts.push(new Chart(el, config)); };
+
+        // Trend: the day's count as a line with its 7-day average; rainy days marked.
+        add('cDaily', { type: 'line',
+            data: { labels: d.daily.map(x => x.label), datasets: [
+                { label: 'Cars per day', data: d.daily.map(x => x.tracked && !x.partial ? x.cars : null), borderColor: accent, backgroundColor: themeColor('--viz-accent', 0.12),
+                  fill: true, borderWidth: 2, tension: 0.25, pointRadius: 0, pointHoverRadius: 4, spanGaps: false },
+                { label: '7-day average', data: d.daily.map(x => x.avg7 ?? null), borderColor: muted, borderDash: [5, 4], borderWidth: 2,
+                  pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.3, spanGaps: true },
+                { label: 'Rainy day', data: d.daily.map(x => x.tracked && !x.partial && x.weather === 'Rainy' ? x.cars : null), showLine: false,
+                  pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: rain, pointBorderColor: themeColor('--surface-raised'), pointBorderWidth: 2 },
+            ] },
+            options: baseOptions({ scales: { x: axis({ grid: { display: false } }), y: axis({ beginAtZero: true, ticks: { precision: 0, color: themeColor('--text-muted'), font: { size: 11 } } }) },
+                plugins: { legend: { display: false }, tooltip: { padding: 10, cornerRadius: 6, filter: item => item.raw !== null,
+                    callbacks: { title: items => { const x = d.daily[items[0].dataIndex]; return `${x.label}${x.partial ? ' (today, so far)' : ''}${x.weather ? ' · ' + x.weather : ''}`; } } } } }) });
+
+        // Wait by arrival hour: a line, thin points where fewer than 5 cars stand behind the average.
+        add('cWait', { type: 'line',
+            data: { labels: o.wait_by_hour.map(w => w.hour), datasets: [{ label: 'Average queue wait (min)', data: o.wait_by_hour.map(w => w.minutes),
+                borderColor: accent, backgroundColor: themeColor('--viz-accent', 0.12), fill: true, borderWidth: 2, tension: 0.3, spanGaps: true,
+                pointRadius: o.wait_by_hour.map(w => w.cars >= MIN_SAMPLE ? 3 : 2), pointBackgroundColor: o.wait_by_hour.map(w => w.cars >= MIN_SAMPLE ? accent : muted),
+                pointBorderWidth: 0, pointHoverRadius: 5 }] },
+            options: baseOptions({ scales: { x: axis({ grid: { display: false } }), y: axis({ beginAtZero: true, titleText: 'minutes' }) },
+                plugins: { legend: { display: false }, tooltip: { padding: 10, cornerRadius: 6,
+                    callbacks: { label: ctx => `${ctx.raw} min average · ${o.wait_by_hour[ctx.dataIndex].cars} cars` } } } }) });
+
+        // Accuracy: predicted vs actual, with the line where they'd be equal.
+        const pts = o.accuracy.points || [];
+        const top = Math.ceil(Math.max(30, ...pts.flat()) * 1.05 / 50) * 50;  // a round axis end
+        add('cAccuracy', { type: 'scatter',
+            data: { datasets: [
+                { label: 'Walk-in', data: pts.map(([x, y]) => ({ x, y })), backgroundColor: themeColor('--viz-accent', 0.55), pointRadius: 3, pointHoverRadius: 5 },
+                { label: 'Exact prediction', type: 'line', data: [{ x: 0, y: 0 }, { x: top, y: top }], borderColor: muted, borderDash: [5, 4],
+                  borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0 },
+            ] },
+            options: baseOptions({ interaction: { mode: 'nearest', intersect: true },
+                scales: { x: axis({ type: 'linear', min: 0, max: Math.ceil(top), titleText: 'predicted (min)' }), y: axis({ min: 0, max: Math.ceil(top), titleText: 'actual (min)' }) },
+                plugins: { legend: { display: false }, tooltip: { padding: 10, cornerRadius: 6, filter: item => item.datasetIndex === 0,
+                    callbacks: { label: ctx => `predicted ${ctx.raw.x} min · actual ${ctx.raw.y} min` } } } }) });
+
+        // Returns: share of return visits back within N days (cumulative).
+        add('cReturns', { type: 'line',
+            data: { datasets: [{ label: 'Back within', data: (c.return_curve || []).map(p => ({ x: p.days, y: p.share })), borderColor: accent,
+                backgroundColor: themeColor('--viz-accent', 0.12), fill: true, borderWidth: 2, stepped: true, pointRadius: 0, pointHoverRadius: 4 }] },
+            options: baseOptions({ scales: { x: axis({ type: 'linear', min: 0, max: 60, ticks: { stepSize: 7, color: themeColor('--text-muted'), font: { size: 11 } }, titleText: 'days since previous visit' }),
+                y: axis({ min: 0, max: 100, ticks: { callback: v => v + '%', color: themeColor('--text-muted'), font: { size: 11 } } }) },
+                plugins: { legend: { display: false }, tooltip: { padding: 10, cornerRadius: 6,
+                    callbacks: { title: items => `Within ${items[0].raw.x} days`, label: ctx => `${ctx.raw.y}% of return visits` } } } }) });
+
+        sections.forEach(s => { s.style.display = ''; });
+        revealOnCreate = false;
+    }
+
+    function drawHeat() {
+        const el = document.getElementById('heat');
+        if (!el) return;
+        const d = report.demand;
+        const max = Math.max(0, ...d.heatmap.flat());
+        let html = '<span></span>' + d.hours.map(h => `<span>${h.replace(' AM', 'a').replace(' PM', 'p')}</span>`).join('');
+        d.heatmap.forEach((row, wd) => {
+            html += `<span class="row-label">${WEEKDAYS[wd]}</span>` + row.map((v, i) => {
+                const a = max && v ? 0.1 + 0.9 * v / max : 0;
+                const fill = a ? themeColor('--viz-accent', a) : 'var(--surface-sunken)';
+                return `<span class="cell" title="${WEEKDAYS[wd]} ${d.hours[i]}: ${v} cars on average" style="--row: ${wd}; background: ${fill};${a > 0.55 ? ' color: #fff;' : ''}">${v ? v.toFixed(1) : ''}</span>`;
+            }).join('');
+        });
+        el.innerHTML = html;
+        document.getElementById('heatScale').style.background = `linear-gradient(90deg, ${themeColor('--viz-accent', 0.1)}, ${themeColor('--viz-accent')})`;
+    }
+
+    // ---------------------------------------------------------------- controls
+    function showTab(key, remember = true) {
+        if (!document.getElementById(`sec-${key}`)) key = 'demand';
+        document.querySelectorAll('.an-tabs button').forEach(b => {
+            const on = b.dataset.tab === key;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-selected', on);
+        });
+        document.querySelectorAll('.an-section').forEach(s => s.classList.toggle('on', s.id === `sec-${key}`));
+        charts.forEach(c => c.resize());
+        enterSection(key);
+        if (remember) history.replaceState(null, '', location.pathname + location.search + `#${key}`);
+    }
+    document.querySelectorAll('.an-tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+    const rangePop = document.getElementById('rangePop');
+    const customBtn = document.querySelector('.seg button[data-days="custom"]');
+    function markPeriodButton() {
+        document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', period.start ? b === customBtn : b.dataset.days === String(period.days)));
+    }
+    function closeRange() { rangePop.classList.remove('open'); customBtn.setAttribute('aria-expanded', 'false'); }
+    document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+        if (b === customBtn) {
+            const open = !rangePop.classList.contains('open');
+            rangePop.classList.toggle('open', open);
+            customBtn.setAttribute('aria-expanded', String(open));
+            if (open) {
+                const today = new Date().toLocaleDateString('en-CA');
+                document.getElementById('rangeEnd').max = document.getElementById('rangeStart').max = today;
+                document.getElementById('rangeStart').value = period.start || report?.period.start || '';
+                document.getElementById('rangeEnd').value = period.end || report?.period.end || today;
+                document.getElementById('rangeError').textContent = '';
+            }
+            return;
+        }
+        closeRange();
+        period = { days: Number(b.dataset.days) };
+        markPeriodButton();
+        load();
+    }));
+    document.getElementById('rangeCancel').addEventListener('click', closeRange);
+    document.getElementById('rangeApply').addEventListener('click', async () => {
+        const start = document.getElementById('rangeStart').value, end = document.getElementById('rangeEnd').value;
+        const error = document.getElementById('rangeError');
+        if (!start || !end) { error.textContent = 'Pick both dates.'; return; }
+        if (end < start) { error.textContent = 'The end date is before the start date.'; return; }
+        period = { start, end };
+        closeRange();
+        markPeriodButton();
+        load();
+    });
+    document.addEventListener('click', e => {
+        if (rangePop.classList.contains('open') && !rangePop.contains(e.target) && e.target !== customBtn) closeRange();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRange(); });
+
+    // Theme switch: recolour the charts and the grid.
+    new MutationObserver(() => { if (report) drawAll(); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    // Another page changed the data: refresh in place when the period includes today.
+    onLiveUpdate(() => {
+        if (report && report.period.end >= new Date().toLocaleDateString('en-CA')) load({ quiet: true });
+    });
+
+    window.addEventListener('hashchange', () => showTab(location.hash.slice(1), false));
+    markPeriodButton();
+    showTab(location.hash.slice(1) || 'demand', false);
+    load();
+</script>
+{% endblock %}

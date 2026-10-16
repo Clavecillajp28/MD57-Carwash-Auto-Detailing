@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block page_comment %}My Profile{% endblock %}
+{% block title %}My Profile - MD57{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">{% endblock %}
+{% block content %}
+<div class="profile-page">
+    <div class="profile-heading"><div><p class="profile-eyebrow">YOUR ACCOUNT</p><h1>My Profile</h1>
+        <p class="profile-muted">Keep your details current and manage your account security.</p></div>
+        <a class="btn-secondary" href="/">Back to home</a>
+    </div>
+    <p id="profileLoading" role="status">Loading your profile…</p>
+    <div id="profileLoadError" role="alert" hidden><p>We could not load your profile.</p><button id="profileRetry" class="btn-secondary" type="button">Try again</button></div>
+    <div id="profileContent" class="profile-layout" hidden>
+        <aside class="profile-card profile-summary" aria-label="Account summary">
+            <div id="profileAvatar" class="profile-avatar" aria-hidden="true"></div>
+            <h2 id="profileName"></h2><span id="profileRole" class="profile-badge"></span>
+            <dl class="profile-facts"><div><dt>Sign-in method</dt><dd id="profileMethod"></dd></div>
+                <div><dt>Member since</dt><dd id="profileCreated"></dd></div>
+                <div><dt>Last profile update</dt><dd id="profileUpdated"></dd></div></dl>
+            <p class="profile-muted">Your account is personal. Keep your password private and use your own login for every action.</p>
+            {% if session.get('is_owner') %}<p><a href="/account-security">Manage email verification and recovery codes</a></p>{% endif %}
+        </aside>
+        <div class="profile-sections">
+            <section class="profile-card" aria-labelledby="detailsHeading">
+                <div class="profile-section-heading"><i class="fa-regular fa-user" aria-hidden="true"></i><div><h2 id="detailsHeading">Personal details</h2><p id="profileNameHint" class="profile-muted"></p></div></div>
+                <form id="profileDetailsForm">
+                    <label for="profileFullname">Full name</label>
+                    <input id="profileFullname" name="fullname" autocomplete="name" minlength="2" maxlength="120" aria-describedby="profileNameHint" required>
+                    <label for="profileUsername">Sign-in identifier</label>
+                    <input id="profileUsername" autocomplete="username" readonly aria-describedby="profileIdentityHint">
+                    <p id="profileIdentityHint" class="profile-muted">Account roles and permissions cannot be changed from a profile.</p>
+                    <div class="profile-actions"><button class="btn-primary" type="submit">Save details</button></div>
+                    <p class="profile-status" id="profileDetailsStatus" role="status" aria-live="polite"></p>
+                </form>
+            </section>
+            <section class="profile-card" aria-labelledby="emailHeading">
+                <div class="profile-section-heading"><i class="fa-regular fa-envelope" aria-hidden="true"></i><div><h2 id="emailHeading">Account email</h2><p id="profileEmailHint" class="profile-muted"></p></div></div>
+                <p id="profileEmail" class="profile-email"></p><span id="profileEmailVerified" class="profile-badge"></span>
+                <p id="profileOwnerAccounts" hidden><a href="/admin/create-user-page">Manage account email in Accounts</a></p>
+                <form id="profileEmailForm" hidden>
+                    <label for="profileNewEmail">New email address</label><input id="profileNewEmail" type="email" maxlength="254" autocomplete="email" required>
+                    <label for="profileEmailPassword">Current password</label><input id="profileEmailPassword" type="password" maxlength="128" autocomplete="current-password" required>
+                    <p class="profile-muted">Your current email stays active until you verify the new address. Updating it signs out all devices and keeps your booking history attached to this account.</p>
+                    <div class="profile-actions"><button class="btn-secondary" type="submit">Send verification code</button></div>
+                    <p id="profileEmailStatus" class="profile-status" role="status" aria-live="polite"></p>
+                </form>
+                <form id="profileEmailVerifyForm" class="profile-verification" hidden>
+                    <h3>Verify your new email</h3><p id="profilePendingEmail" class="profile-muted"></p>
+                    <label for="profileEmailCode">6-digit verification code</label>
+                    <input id="profileEmailCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
+                    <div class="profile-actions"><button class="btn-primary" type="submit">Verify and update email</button><button class="btn-secondary" id="profileCancelEmail" type="button">Cancel email change</button></div>
+                    <p id="profileEmailVerifyStatus" class="profile-status" role="status" aria-live="polite"></p>
+                </form>
+            </section>
+            <section id="profileReminderSection" class="profile-card" aria-labelledby="reminderHeading" hidden>
+                <div class="profile-section-heading"><i class="fa-regular fa-bell" aria-hidden="true"></i><div><h2 id="reminderHeading">Shift reminders</h2><p class="profile-muted">An optional reminder before a scheduled shift. This address is separate from your sign-in and password recovery email.</p></div></div>
+                <form id="profileReminderForm"><label for="profileReminderEmail">Reminder email <span class="profile-muted">(optional)</span></label>
+                    <input id="profileReminderEmail" type="email" maxlength="254" autocomplete="email" aria-describedby="profileReminderHint">
+                    <p id="profileReminderHint" class="profile-muted">Leave this blank to stop shift reminder emails.</p>
+                    <div class="profile-actions"><button class="btn-primary" type="submit">Save reminders</button></div>
+                    <p id="profileReminderStatus" class="profile-status" role="status" aria-live="polite"></p></form>
+            </section>
+            <section class="profile-card" aria-labelledby="passwordHeading">
+                <div class="profile-section-heading"><i class="fa-solid fa-lock" aria-hidden="true"></i><div><h2 id="passwordHeading">Password</h2><p id="profilePasswordHint" class="profile-muted">{{ password_hint }} Changing it signs out all devices.</p></div></div>
+                <form id="profilePasswordForm">
+                    <label for="profileCurrentPassword">Current password</label><input id="profileCurrentPassword" type="password" maxlength="128" autocomplete="current-password" required>
+                    <label for="profileNewPassword">New password</label><input id="profileNewPassword" type="password" minlength="{{ password_min }}" maxlength="{{ password_max }}" pattern="{{ password_pattern }}" title="{{ password_hint }}" autocomplete="new-password" aria-describedby="profilePasswordHint" required>
+                    <label for="profileConfirmPassword">Confirm new password</label><input id="profileConfirmPassword" type="password" minlength="{{ password_min }}" maxlength="{{ password_max }}" pattern="{{ password_pattern }}" title="{{ password_hint }}" autocomplete="new-password" required>
+                    <label class="profile-checkbox"><input id="profileShowPassword" type="checkbox"> Show passwords in this form</label>
+                    <div class="profile-actions"><button class="btn-primary" type="submit">Update password</button></div>
+                    <p id="profilePasswordStatus" class="profile-status" role="status" aria-live="polite"></p>
+                </form>
+            </section>
+            <section class="profile-card" aria-labelledby="sessionHeading">
+                <div class="profile-section-heading"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><h2 id="sessionHeading">Sign out on all devices</h2><p class="profile-muted">End every active session, including this one. You will need to sign in again.</p></div></div>
+                <form id="profileSessionsForm"><div id="profileSessionPasswordRow"><label for="profileSessionPassword">Current password</label><input id="profileSessionPassword" type="password" maxlength="128" autocomplete="current-password" required></div>
+                    <div class="profile-actions"><button class="btn-secondary" type="submit">Sign out all devices</button></div>
+                    <p id="profileSessionsStatus" class="profile-status" role="status" aria-live="polite"></p></form>
+                <div id="profileReauthenticate" class="profile-verification" hidden><p>For your security, sign in with Google again before ending all sessions.</p><a class="btn-secondary" href="/auth/google?next=/profile">Sign in again with Google</a></div>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_script %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>{% endblock %}

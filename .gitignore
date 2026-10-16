@@ -1,0 +1,11 @@
+# Private deployment state
+.env
+*.db
+*.db-*
+*.sqlite3
+*.log
+.runtime/
+backups/
+.venv/
+__pycache__/
+*.py[cod]

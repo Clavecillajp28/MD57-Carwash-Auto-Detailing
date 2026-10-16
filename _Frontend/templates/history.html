@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+{% block page_comment %}Service History{% endblock %}
+{% block title %}MD57 Car Wash & Auto Detailing - Service History & Customer Database{% endblock %}
+
+{% block extra_style %}
+        .list-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+        .list-filters .search-box { flex: 1 1 240px; margin: 0 !important; }
+        .list-filters label { display: block; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+        .list-filters input[type="date"] { min-height: 40px; }
+        .list-filters .date-field { flex: 0 1 160px; min-width: 130px; }
+        @media (max-width: 600px) { .list-filters .date-field { flex: 1 1 calc(50% - 5px); } }
+        .main-container {
+            flex: 1;
+            padding: 25px 16px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .history-item-card {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all var(--base) ease;
+        }
+        .history-item-card:hover {
+            border-color: var(--accent-amber);
+            background: color-mix(in srgb, var(--info) 5%, transparent);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .history-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 0;
+            flex: 1;
+        }
+        .history-item-title {
+            font-size: var(--text-md);
+            font-weight: 700;
+            color: var(--text-bright);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+        .history-item-title-text {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item-details {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-badge {
+            background: color-mix(in srgb, var(--info) 10%, transparent);
+            color: var(--accent-amber);
+            border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-weight: 700;
+            font-size: var(--text-xs);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .history-status-tag {
+            flex-shrink: 0;
+        }
+        .history-status-tag.completed {
+            background: color-mix(in srgb, var(--success) 10%, transparent);
+            color: var(--accent-green);
+            border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+        }
+        .history-status-tag.cancelled {
+            background: color-mix(in srgb, var(--danger) 10%, transparent);
+            color: var(--accent-red);
+            border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+        }
+
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+        .pagination-info {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .pagination-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .suki-text {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        /* Modal Pop-up for Full Details */
+
+        .modal-content {
+            max-width: 420px;
+        }
+
+        .modal-header h3 { margin: 0; color: var(--accent-amber); font-size: var(--text-lg); font-weight: 700; }
+
+        @media (max-width: 768px) {
+            .main-container { padding: 16px; }
+            .card { padding: 16px 12px; }
+            .page-title { font-size: var(--text-lg); }
+            .page-subtitle { font-size: var(--text-xs); margin-bottom: 18px; }
+        }
+{% endblock %}
+
+{% block content %}
+            <h2 class="page-title"><i class="fa-solid fa-clock-rotate-left"></i> Service History & Customer Database</h2>
+            {% if role == 'staff' %}
+            <p class="page-subtitle">Showing your own service history only - jobs you personally handled. Every job that's finished - completed or cancelled - lands here automatically, chronologically sorted.</p>
+            {% else %}
+            <p class="page-subtitle">Every booking that's finished - completed or cancelled - lands here automatically, chronologically sorted. Cancelled bookings can still be restored from the Cancelled page (admin only).</p>
+            {% endif %}
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <h3 style="margin: 0; font-size: var(--text-md); color: var(--accent-amber);">Completed & Cancelled Transactions Archive</h3>
+                    <button class="btn-primary" onclick="exportHistoryCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+                </div>
+
+                <div class="list-filters">
+                    <input type="text" id="historySearchInput" class="search-box" placeholder="Search by plate, customer name, service, or washer..." onkeyup="applyHistorySearch()" aria-label="Search history" style="width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-light); color: var(--text-main); font-size: var(--text-sm); outline: none;">
+                    <div class="date-field"><label for="historyFrom">From</label><input type="date" id="historyFrom" onchange="applyHistorySearch()"></div>
+                    <div class="date-field"><label for="historyTo">To</label><input type="date" id="historyTo" onchange="applyHistorySearch()"></div>
+                    <button type="button" class="btn-secondary btn-sm" onclick="clearHistoryDates()" style="min-height: 40px;">Clear dates</button>
+                </div>
+
+                <!-- History Items Container -->
+                <div class="history-list" id="historyListContainer" data-skeleton="cards:4">
+                    <div style="text-align: center; color: var(--text-muted); padding: 25px; font-size: var(--text-xs);">No service history recorded yet.</div>
+                </div>
+
+                <!-- Pagination Controls Container -->
+                <div class="pagination-container" id="paginationContainer" style="display: none;">
+                    <div class="pagination-info" id="paginationInfo">Showing 1-5 of 0</div>
+                    <div class="pagination-buttons">
+                        <button class="btn-page" id="prevBtn" onclick="changePage(-1)">&#10094;</button>
+                        <button class="btn-page" id="nextBtn" onclick="changePage(1)">&#10095;</button>
+                    </div>
+                </div>
+            </div>
+{% endblock %}
+
+{% block modals %}
+    <!-- LOGOUT ANIMATION MODAL OVERLAY -->
+    <div id="logoutAnimationModal">
+        <div class="logout-animation-card">
+            <div class="logout-icon-animated"><i class="fa-solid fa-car"></i> <i class="fa-solid fa-clock-rotate-left"></i></div>
+            <h3>Signing Out...</h3>
+            <p>Thank you for choosing our Car Wash. God Bless You!!</p>
+        </div>
+    </div>
+
+    <!-- Full Details Modal Pop-up -->
+    <div class="modal-overlay" id="detailsModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeDetailsModal()" style="position: absolute; top: 10px; right: 14px;">&times;</span>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-magnifying-glass"></i> Transaction Full Details</h3>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px;">
+                <div class="detail-row">
+                    <span class="detail-label">Customer Name</span>
+                    <span class="detail-value" id="detCustomer">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Email Address</span>
+                    <span class="detail-value" id="detEmail">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Plate Number</span>
+                    <span class="detail-value" id="detPlate">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Outcome</span>
+                    <span class="detail-value" id="detStatus">-</span>
+                </div>
+                <div class="detail-row" id="detCancelReasonRow" style="display: none;">
+                    <span class="detail-label">Cancel Reason</span>
+                    <span class="detail-value" id="detCancelReason">-</span>
+                </div>
+                <div class="detail-row" id="detWasherRow" style="display: none;">
+                    <span class="detail-label">Washed By</span>
+                    <span class="detail-value" id="detWasher">-</span>
+                </div>
+                <div class="detail-row" id="detPickupRow">
+                    <span class="detail-label">Picked Up At</span>
+                    <span class="detail-value" id="detPickupAt">Not recorded</span>
+                </div>
+                <div class="detail-row" id="detPickupByRow">
+                    <span class="detail-label">Pickup Confirmed By</span>
+                    <span class="detail-value" id="detPickupBy">Not recorded</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Loyalty Status</span>
+                    <span class="detail-value" id="detLoyalty">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Last Visit</span>
+                    <span class="detail-value" id="detLastVisit">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Usually Returns After</span>
+                    <span class="detail-value" id="detReturnInterval">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Service Type</span>
+                    <span class="detail-value" id="detService">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Vehicle Type</span>
+                    <span class="detail-value" id="detVehicle">-</span>
+                </div>
+                <div class="detail-row" style="border-bottom: none;">
+                    <span class="detail-label" id="detDateLabel">Completed Timestamp</span>
+                    <span class="detail-value" id="detDate">-</span>
+                </div>
+            </div>
+            <button class="btn-primary" style="width: 100%;" onclick="closeDetailsModal()">Close</button>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    let globalHistoryData = [];
+    // What's actually rendered, paginated and exported - the records
+    // matching the search box and the From/To dates.
+    let filteredHistoryData = [];
+    let currentPage = 1;
+    const itemsPerPage = 5;
+
+    // The booking a notification pointed at (?booking=<id>), opened once
+    // the history has loaded.
+    let focusBookingId = takeFocusBookingId();
+
+    document.addEventListener("DOMContentLoaded", loadHistoryData);
+
+    // Pickup closes a new completed record; legacy rows retain their wash-finish date.
+    function closedAt(car) {
+        return car.picked_up_at || car.completed_at || car.cancelled_at || 'N/A';
+    }
+
+    function loadHistoryData() {
+        fetch('/api/get-history')
+            .then(res => res.json())
+            .then(data => {
+                // Each record arrives with its vehicle's visit_count,
+                // last_visit and usual_return_days - counted by the
+                // server across every completed visit on file for that
+                // plate (the backend's vehicles.py), not just the rows
+                // this page was given.
+                globalHistoryData = (data.status === 'success' && Array.isArray(data.data)) ? data.data : [];
+                applyHistorySearch();
+
+                if (focusBookingId) {
+                    const reservationId = focusBookingId;
+                    focusBookingId = null;
+                    const index = filteredHistoryData.findIndex(car => Number(car.id) === reservationId);
+                    if (index === -1) {
+                        showToast('Not in History', `Booking MD57-${reservationId} isn't in the history you can see.`, 'error');
+                    } else {
+                        currentPage = Math.floor(index / itemsPerPage) + 1;
+                        renderTablePage();
+                        openDetailsModal(index);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching service history:", err);
+            });
+    }
+
+    // Matches plate number, customer name, service type, washer name, and
+    // cancel reason - covering every field the visible card/detail modal
+    // actually shows, so "search" always finds what's on screen.
+    // ...and the From/To dates, by when the record was closed out - the
+    // same period Analytics uses, so an export can match a report.
+    function applyHistorySearch() {
+        let query = (document.getElementById('historySearchInput').value || '').trim().toLowerCase();
+        filteredHistoryData = globalHistoryData.filter(car => {
+            if (!inDateRange(closedAt(car), 'historyFrom', 'historyTo')) return false;
+            if (!query) return true;
+            let haystack = [
+                car.plate_number, car.customer_name, car.service_type, car.vehicle_model,
+                car.washer, car.cancel_reason, car.status,
+            ].filter(Boolean).join(' ').toLowerCase();
+            return haystack.includes(query);
+        });
+        currentPage = 1;
+        renderTablePage();
+    }
+
+    function clearHistoryDates() {
+        document.getElementById('historyFrom').value = '';
+        document.getElementById('historyTo').value = '';
+        applyHistorySearch();
+    }
+
+    function renderTablePage() {
+        let container = document.getElementById('historyListContainer');
+        let paginationContainer = document.getElementById('paginationContainer');
+
+        container.innerHTML = '';
+
+        let totalItems = filteredHistoryData.length;
+        let totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        if (totalItems === 0) {
+            let message = globalHistoryData.length === 0
+                ? 'No service history recorded yet.'
+                : 'No results match your search.';
+            container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 25px; font-size: var(--text-xs);">${escapeHtml(message)}</div>`;
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        let start = (currentPage - 1) * itemsPerPage;
+        let end = start + itemsPerPage;
+        let paginatedItems = filteredHistoryData.slice(start, end);
+
+        paginatedItems.forEach((car, idx) => {
+            let globalIndex = start + idx;
+            let isCancelled = car.status === 'cancelled';
+            let rawDate = closedAt(car);
+            let custName = car.customer_name || 'N/A';
+            let plate = car.plate_number || 'N/A';
+            let service = car.service_type || 'Standard Wash';
+
+            let visits = car.visit_count || 0;
+
+            let loyaltyTag = visits > 1
+                ? `<span class="suki-text"><i class="fa-solid fa-star"></i> Loyal Customer (${visits} Visits${car.usual_return_days != null ? ', back every ~' + formatReturnInterval(car.usual_return_days) : ''})</span>`
+                : visits === 1
+                    ? `<span style="color: var(--text-muted);">New (1st Visit)</span>`
+                    : `<span style="color: var(--text-muted);">No completed visits</span>`;
+
+            let statusTag = isCancelled
+                ? `<span class="history-status-tag cancelled">Cancelled</span>`
+                : `<span class="history-status-tag completed">Completed</span>`;
+
+            let washerBit = (!isCancelled && car.washer) ? ` &bull; <i class="fa-solid fa-user-gear"></i> ${escapeHtml(car.washer)}` : '';
+
+            container.innerHTML += `
+                <div class="history-item-card" onclick="openDetailsModal(${globalIndex})">
+                    <div class="history-item-info">
+                        <div class="history-item-title">
+                            <span class="history-item-title-text"><i class="fa-solid fa-car"></i> ${escapeHtml(plate)} &bull; ${escapeHtml(custName)}</span>
+                            ${statusTag}
+                        </div>
+                        <div class="history-item-details">
+                            <i class="fa-solid fa-screwdriver-wrench"></i> ${escapeHtml(service)} &bull; <i class="fa-regular fa-clock"></i> ${escapeHtml(formatTimestamp(rawDate))} &bull; ${loyaltyTag}${washerBit}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="history-badge">View Details</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (totalItems > itemsPerPage) {
+            paginationContainer.style.display = 'flex';
+            document.getElementById('paginationInfo').innerText = `Showing ${start + 1}-${Math.min(end, totalItems)} of ${totalItems}`;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        } else {
+            paginationContainer.style.display = 'none';
+        }
+    }
+
+    function changePage(direction) {
+        currentPage += direction;
+        renderTablePage();
+    }
+
+    function openDetailsModal(index) {
+        let car = filteredHistoryData[index];
+        if (!car) return;
+
+        let visits = car.visit_count || 0;
+        let loyaltyStatus = visits > 1 ? `Loyal Customer (${visits} total visits)`
+            : visits === 1 ? `First-time Customer (1 visit)` : `No completed visits yet`;
+
+        let isCancelled = car.status === 'cancelled';
+
+        document.getElementById('detCustomer').innerText = car.customer_name || 'N/A';
+        document.getElementById('detEmail').innerText = car.email || 'N/A';
+        document.getElementById('detPlate').innerText = car.plate_number || 'N/A';
+        document.getElementById('detLoyalty').innerText = loyaltyStatus;
+        document.getElementById('detLastVisit').innerText = car.last_visit || 'No completed visit yet';
+        document.getElementById('detReturnInterval').innerText = car.usual_return_days != null
+            ? `About ${formatReturnInterval(car.usual_return_days)}`
+            : 'Not enough visits yet';
+
+        if (visits > 1) {
+            document.getElementById('detLoyalty').style.color = "var(--accent-green)";
+        } else {
+            document.getElementById('detLoyalty').style.color = "var(--text-bright)";
+        }
+
+        let detStatus = document.getElementById('detStatus');
+        detStatus.innerText = isCancelled ? 'Cancelled' : car.picked_up_at ? 'Picked Up' : 'Completed';
+        detStatus.style.color = isCancelled ? 'var(--accent-red)' : 'var(--accent-green)';
+
+        let cancelReasonRow = document.getElementById('detCancelReasonRow');
+        if (isCancelled) {
+            cancelReasonRow.style.display = 'flex';
+            document.getElementById('detCancelReason').innerText = car.cancel_reason === 'no_show' ? 'No-Show (Auto-Released)'
+                : car.cancel_reason === 'staff_absent' ? 'Staff Absent (Auto-Cancelled)' : (car.cancel_reason || 'Cancelled by user/staff');
+        } else {
+            cancelReasonRow.style.display = 'none';
+        }
+
+        let washerRow = document.getElementById('detWasherRow');
+        if (!isCancelled && car.washer) {
+            washerRow.style.display = 'flex';
+            document.getElementById('detWasher').innerText = car.washer;
+        } else {
+            washerRow.style.display = 'none';
+        }
+
+        document.getElementById('detService').innerText = car.service_type || 'Standard Wash';
+        document.getElementById('detVehicle').innerText = describeVehicle(car);
+        document.getElementById('detDateLabel').innerText = isCancelled ? 'Cancelled Timestamp' : 'Completed Timestamp';
+        document.getElementById('detDate').innerText = formatTimestamp(isCancelled ? car.cancelled_at : car.completed_at);
+        document.getElementById('detPickupRow').style.display = isCancelled ? 'none' : 'flex';
+        document.getElementById('detPickupByRow').style.display = isCancelled ? 'none' : 'flex';
+        document.getElementById('detPickupAt').textContent = car.picked_up_at ? formatTimestamp(car.picked_up_at) : 'Not recorded';
+        document.getElementById('detPickupBy').textContent = car.picked_up_by_name || 'Not recorded';
+
+        document.getElementById('detailsModal').classList.add('open');
+    }
+
+    function closeDetailsModal() {
+        document.getElementById('detailsModal').classList.remove('open');
+    }
+
+    // Exports what's listed - the dates and search applied.
+    function exportHistoryCSV() {
+        if (!filteredHistoryData || filteredHistoryData.length === 0) {
+            showToast('Nothing to Export', 'No history records match the dates and search.', 'error');
+            return;
+        }
+
+        // Already sorted newest-first by the server (/api/get-history
+        // orders by pickup, completion or cancellation DESC), so no
+        // client-side re-sort needed.
+        downloadCSV(`md57_service_history_${dateRangeLabel('historyFrom', 'historyTo')}.csv`,
+            ['Customer Name', 'Email', 'Plate Number', 'Car Model', 'Visits', 'Last Visit', 'Usual Return (days)', 'Service Type', 'Vehicle Type', 'Outcome', 'Timestamp', 'Wash Finished At', 'Picked Up At', 'Pickup Confirmed By'],
+            filteredHistoryData.map(car => [
+                car.customer_name || 'N/A',
+                car.email || 'N/A',
+                car.plate_number,
+                car.vehicle_model || '',
+                car.visit_count || 0,
+                car.last_visit || '',
+                car.usual_return_days != null ? car.usual_return_days : '',
+                car.service_type,
+                car.vehicle_type || 'Vehicle',
+                car.status === 'cancelled' ? 'Cancelled' : 'Completed',
+                closedAt(car),
+                car.completed_at || '',
+                car.picked_up_at || '',
+                car.picked_up_by_name || '',
+            ]));
+    }
+
+</script>
+{% endblock %}
