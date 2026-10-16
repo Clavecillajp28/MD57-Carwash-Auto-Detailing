@@ -6,6 +6,10 @@ if __name__=='__main__':
 import os
 from datetime import timedelta
 
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
