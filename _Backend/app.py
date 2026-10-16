@@ -210,4 +210,9 @@ app.register_blueprint(operations_bp)
 
 
 from background_jobs import start_background_jobs
-start_background_jobs(app)
+
+if (
+    os.environ.get("MD57_BACKGROUND_JOBS", "false").lower()
+    in ("true", "1")
+):
+    start_background_jobs(app)
