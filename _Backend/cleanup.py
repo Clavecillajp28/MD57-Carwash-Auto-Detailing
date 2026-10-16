@@ -1,5 +1,6 @@
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from database import get_db_connection
 from live_updates import publish

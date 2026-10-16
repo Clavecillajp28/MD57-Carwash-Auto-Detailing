@@ -5,6 +5,15 @@ import requests
 from flask import current_app
 
 
+class DeliveryError(RuntimeError):
+    """Safe operational code; provider bodies and credentials stay private."""
+    def __init__(self, code, *, uncertain=False, retryable=False):
+        super().__init__(code)
+        self.code = code
+        self.uncertain = uncertain
+        self.retryable = retryable
+
+
 def send_brevo(subject, recipient, text, html, message_id=None):
     config = current_app.config
     key = config.get('BREVO_API_KEY')
@@ -14,7 +23,7 @@ def send_brevo(subject, recipient, text, html, message_id=None):
     else:
         name, address = parseaddr(sender or '')
     if not key or not address or '@' not in address:
-        raise RuntimeError('Configure BREVO_API_KEY and a verified MAIL_DEFAULT_SENDER.')
+        raise DeliveryError('mail_configuration')
     payload = {
         'sender': {'name': name or 'MD57 Car Wash', 'email': address},
         'to': [{'email': recipient}], 'subject': subject,
@@ -28,8 +37,15 @@ def send_brevo(subject, recipient, text, html, message_id=None):
         response = requests.post('https://api.brevo.com/v3/smtp/email',
             headers={'api-key': key, 'accept': 'application/json'},
             json=payload, timeout=(5, 15), allow_redirects=False)
+    except requests.ConnectTimeout:
+        raise DeliveryError('provider_connect_timeout', retryable=True) from None
     except requests.RequestException:
-        raise RuntimeError('HTTPS email delivery failed. Check provider availability.') from None
+        raise DeliveryError('provider_response_unknown', uncertain=True) from None
     if response.status_code != 201:
         # Do not log response bodies: they can contain private account details.
-        raise RuntimeError(f'Email provider rejected delivery (HTTP {response.status_code}).')
+        raise DeliveryError(f'provider_http_{response.status_code}', retryable=response.status_code == 429 or response.status_code >= 500)
+    try:
+        provider_id = response.json().get('messageId')
+    except (ValueError, AttributeError):
+        provider_id = None
+    return provider_id if isinstance(provider_id, str) and len(provider_id) <= 512 else None

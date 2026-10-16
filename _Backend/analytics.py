@@ -19,7 +19,8 @@ scope, so no peso amount is reported anywhere here.
 """
 import math
 from collections import Counter, defaultdict
-from datetime import date, datetime, timedelta
+from datetime import timedelta
+from shop_clock import date, datetime
 from statistics import median
 
 from database import get_db_connection
@@ -184,7 +185,7 @@ def period_label(start, end):
 def parse_period(args, today=None):
     """(start, end) dates from ?days=7|30|90 or ?start=YYYY-MM-DD&end=YYYY-MM-DD.
     Raises ValueError with a message the page can show."""
-    today = today or date.today()
+    today = today or datetime.now().date()
     if args.get('start') or args.get('end'):
         try:
             start = datetime.strptime(args.get('start', ''), '%Y-%m-%d').date()
@@ -208,17 +209,26 @@ def parse_period(args, today=None):
 
 
 # ---------------------------------------------------------------- loading
-def _load(cursor, source='all'):
+def _load(cursor, source='all', start=None, end=None):
     """Every booking, including the cancelled ones cleanup.py has moved to the archive."""
+    bounds = ''
+    params = []
+    if start and end:
+        bounds = ''' AND ((r.completed_at>=? AND r.completed_at<?)
+            OR (r.cancelled_at>=? AND r.cancelled_at<?)
+            OR (r.created_at>=? AND r.created_at<?)
+            OR (r.booking_date>=substr(?,1,10) AND r.booking_date<substr(?,1,10)))'''
+        params = [start,end]*4
     rows = cursor.execute(f"""
         SELECT {_SELECT}, s.service_name, s.service_category, s.base_duration_minutes AS base_minutes
         FROM reservations r LEFT JOIN services s ON s.service_id = r.service_id
-        WHERE {source_sql(source, 'r')}
+        WHERE {source_sql(source, 'r')}{bounds}
         UNION ALL
         SELECT {_SELECT}, s.service_name, s.service_category, s.base_duration_minutes AS base_minutes
         FROM reservations_archive r LEFT JOIN services s ON s.service_id = r.service_id
-        WHERE {source_sql(source, 'r')}
-    """).fetchall()
+        WHERE {source_sql(source, 'r')}{bounds}
+          AND NOT EXISTS (SELECT 1 FROM reservations live WHERE live.reservation_id=r.reservation_id)
+    """, params*2).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -311,7 +321,7 @@ def build(start, end, now=None, source='real'):
     today = now.date()
     conn = get_db_connection()
     cursor = conn.cursor()
-    rows = _load(cursor, source)
+    rows = _load(cursor, source, prev_start_dt.strftime(STAMP), end_dt.strftime(STAMP))
     extra = {r['type_name']: r['multiplier_minutes'] for r in cursor.execute('SELECT * FROM vehicle_types')}
     bays = len({r[0] for r in cursor.execute('SELECT DISTINCT default_bay FROM services WHERE is_active = 1')}) or 1
     staff_accounts = cursor.execute(
@@ -327,8 +337,9 @@ def build(start, end, now=None, source='real'):
     feedback = cursor.execute(f"""
         SELECT f.rating, f.created_at, r.assigned_staff_id, r.completed_at
         FROM feedbacks f LEFT JOIN reservations r ON r.reservation_id = f.reservation_id
-        WHERE {source_sql(source, 'r')}
-    """).fetchall()
+        WHERE f.is_synthetic=0 AND {source_sql(source, 'r')}
+          AND f.created_at>=? AND f.created_at<?
+    """, (prev_start_dt.strftime(STAMP),end_dt.strftime(STAMP))).fetchall()
 
     for row in rows:
         row['_done'] = _ts(row['completed_at']) if row['queue_status'] in DONE else None
@@ -339,7 +350,9 @@ def build(start, end, now=None, source='real'):
     served = [r for r in rows if _in(r['_done'], start_dt, end_dt)]
     served_before = [r for r in rows if _in(r['_done'], prev_start_dt, start_dt)]
     # The shop's records start with its first finished service.
-    first_record = min((r['_done'] for r in rows if r['_done']), default=None)
+    first_record = _ts(cursor.execute(f'''SELECT MIN(completed_at) FROM (
+        SELECT completed_at FROM reservations r WHERE queue_status IN ('ready','completed') AND {source_sql(source,'r')}
+        UNION ALL SELECT completed_at FROM reservations_archive r WHERE queue_status IN ('ready','completed') AND {source_sql(source,'r')})''').fetchone()[0])
     comparable = first_record is not None and first_record <= prev_start_dt
     # Averages only count days the system was in use, and only days that are
     # over - a day still in progress, or before the first record, would drag them down.
@@ -347,7 +360,8 @@ def build(start, end, now=None, source='real'):
     tracked_days = max(0, (end - tracked_from).days + 1)
     full_days = [tracked_from + timedelta(days=i) for i in range(tracked_days) if tracked_from + timedelta(days=i) < today]
 
-    visits = _visits(rows)
+    from vehicles import vehicle_visits
+    visits = vehicle_visits(source=source, plates=[r['vehicle_plate_number'] for r in rows], since=prev_start_dt.date(), until=end)
     kpis = _kpis(rows, served, served_before, start_dt, end_dt, prev_start_dt, now, attendance, feedback, visits, comparable)
     demand = _demand(rows, served, start, days, full_days, today, attendance, bays, tracked_from)
     operations = _operations(rows, served, start_dt, end_dt, now)
@@ -421,19 +435,6 @@ def _attendance(cursor, first_day, last_day, source='all'):
 
 def _worked(record):
     return record['status'] in ('Present', 'Late')
-
-
-def _visits(rows):
-    """{plate key: sorted list of visit days} - vehicles.py's definition, archive included."""
-    by_plate = defaultdict(set)
-    models = {}
-    for row in sorted((r for r in rows if r['_done']), key=lambda r: r['_done']):
-        key = plate_key(row['vehicle_plate_number'])
-        if key:
-            by_plate[key].add(row['_done'].date())
-            if row['vehicle_model']:
-                models[key] = row['vehicle_model']
-    return {key: {'days': sorted(days), 'model': models.get(key)} for key, days in by_plate.items()}
 
 
 def _visits_in(visits, start, end):

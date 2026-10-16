@@ -1,6 +1,7 @@
 import csv as csv_module
 import io
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from flask import Blueprint, jsonify, request, session, Response
 
@@ -36,14 +37,31 @@ def clock_now():
     return datetime.now()
 
 
-def _insert_attendance(staff_user_id, staff_name, date_str, status, time_in='--:--', time_out='--:--'):
+def _insert_attendance(staff_user_id, staff_name, date_str, status, time_in='--:--', time_out='--:--', *, expected_id=None):
+    from werkzeug.exceptions import Conflict
     conn = get_db_connection()
-    conn.execute(
-        "INSERT INTO staff_attendance (staff_user_id, staff_name, date_str, status, time_in, time_out, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (staff_user_id, staff_name, date_str, status, time_in, time_out, now_str()),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        latest=conn.execute('''SELECT attendance_id,status,time_in,time_out FROM staff_attendance
+            WHERE staff_user_id=? AND date_str=? AND is_synthetic=0 ORDER BY attendance_id DESC LIMIT 1''',
+            (staff_user_id,date_str)).fetchone()
+        on_duty=bool(latest and latest['status'] in ('Present','Late') and latest['time_out']=='--:--')
+        if expected_id is not None and (not latest or latest['attendance_id']!=expected_id or latest['status']!='Pending'):
+            raise Conflict('This clock-in request has changed. Refresh attendance.')
+        if status=='Pending' and (on_duty or latest and latest['status']=='Pending'):
+            raise Conflict('A clock-in or pending request already exists.')
+        if status in ('Present','Late'):
+            if time_out=='--:--' and on_duty:
+                raise Conflict('This employee is already clocked in.')
+            if time_out!='--:--' and (not on_duty or latest['time_in']!=time_in):
+                raise Conflict('Attendance changed. Refresh before recording time out.')
+        conn.execute(
+            "INSERT INTO staff_attendance (staff_user_id, staff_name, date_str, status, time_in, time_out, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (staff_user_id, staff_name, date_str, status, time_in, time_out, now_str()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _is_date_str(value):
@@ -195,6 +213,26 @@ def api_staff_attendance():
     time_in = data.get('time_in', '--:--')
     time_out = data.get('time_out', '--:--')
 
+    def parse_clock(value):
+        if not isinstance(value, str):
+            raise ValueError('Invalid clock value')
+        return datetime.strptime(value.strip().upper(), '%I:%M %p')
+
+    if status == 'Absent':
+        if time_in != '--:--' or time_out != '--:--':
+            return jsonify(status='error', message='Absent attendance cannot have clock times.'), 400
+    elif status in ('Present', 'Late'):
+        try:
+            start = parse_clock(time_in)
+            time_in = start.strftime('%I:%M %p')
+            if time_out != '--:--':
+                end = parse_clock(time_out)
+                if end <= start:
+                    raise ValueError('Time out must follow time in')
+                time_out = end.strftime('%I:%M %p')
+        except (TypeError, ValueError):
+            return jsonify(status='error', message='Use valid clock times; time out must follow time in.'), 400
+
     # Must reference a real staff account, not an arbitrary string.
     staff_user_id, staff_name = _staff_from_request(data)
     if not staff_user_id:
@@ -281,7 +319,12 @@ def api_cancel_clock_in_request():
         return jsonify({'status': 'error', 'message': 'You have no clock-in request waiting.'}), 400
 
     conn = get_db_connection()
-    conn.execute("DELETE FROM staff_attendance WHERE attendance_id = ? AND status = 'Pending'", (row['latest_id'],))
+    conn.execute('BEGIN IMMEDIATE')
+    changed=conn.execute("DELETE FROM staff_attendance WHERE attendance_id = ? AND status = 'Pending' AND attendance_id=(SELECT MAX(attendance_id) FROM staff_attendance WHERE staff_user_id=? AND date_str=? AND is_synthetic=0)",
+                         (row['latest_id'],staff_user_id,datetime.now().strftime('%Y-%m-%d'))).rowcount
+    if changed!=1:
+        conn.rollback();conn.close()
+        return jsonify(status='error',message='This request has already been handled. Refresh attendance.'),409
     conn.commit()
     conn.close()
 
@@ -320,7 +363,7 @@ def api_confirm_clock_in():
         is_late = False
     new_status = 'Late' if is_late else 'Present'
 
-    _insert_attendance(staff_user_id, staff_name, datetime.now().strftime('%Y-%m-%d'), new_status, time_in)
+    _insert_attendance(staff_user_id, staff_name, datetime.now().strftime('%Y-%m-%d'), new_status, time_in, expected_id=row['latest_id'])
 
     log_activity(session.get('user', 'Admin'), f'Confirmed clock-in for {staff_name} at {time_in} ({new_status})')
     create_notification(
@@ -341,7 +384,7 @@ def api_reject_clock_in():
     if not row or row['status'] != 'Pending':
         return jsonify({'status': 'error', 'message': 'No pending clock-in request for that staff member.'}), 400
 
-    _insert_attendance(staff_user_id, staff_name, datetime.now().strftime('%Y-%m-%d'), 'Absent')
+    _insert_attendance(staff_user_id, staff_name, datetime.now().strftime('%Y-%m-%d'), 'Absent', expected_id=row['latest_id'])
 
     log_activity(session.get('user', 'Admin'), f'Rejected clock-in request for {staff_name}')
     create_notification(
@@ -403,12 +446,13 @@ def api_export_attendance_csv():
     output = io.StringIO()
     output.write('﻿')  # UTF-8 BOM - keeps Excel/Google Sheets from mis-decoding the file
     writer = csv_module.writer(output)
+    from spreadsheet import safe_cell
     writer.writerow(['Staff Name', 'Date', 'Status', 'Time In', 'Time Out', 'Recorded At'])
     for row in rows:
-        writer.writerow([
+        writer.writerow([safe_cell(value) for value in [
             row['staff_name'], row['date_str'], row['status'],
             row['time_in'], row['time_out'], row['created_at'],
-        ])
+        ]])
 
     log_activity(session.get('user', 'Admin'), 'Exported attendance logs to CSV')
     filename = f"MD57_Attendance_Logs_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -715,7 +759,7 @@ def api_update_notify_contact():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE users SET reminder_email = ?, profile_updated_at = datetime('now','localtime') WHERE user_id = ?",
+        "UPDATE users SET reminder_email = ?, profile_updated_at = shop_now() WHERE user_id = ?",
         (email, user_id),
     )
     conn.commit()

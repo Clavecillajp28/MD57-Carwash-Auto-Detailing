@@ -6,10 +6,11 @@ estimate, then the catalogue standard. None means availability is unknown.
 """
 import math
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 from statistics import median
 
-from scheduling import GAP_MINUTES, OVERDUE_ALLOWANCE
+from timing_policy import GAP_MINUTES, OVERDUE_ALLOWANCE
 from utils import BUSINESS_OPEN_HOUR, BUSINESS_CLOSE_HOUR, MAX_PLAUSIBLE_SERVICE_MINUTES, parse_booking_datetime
 
 STAMP = '%Y-%m-%d %H:%M:%S'

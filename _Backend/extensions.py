@@ -19,6 +19,8 @@ def init_extensions(app):
     csrf.init_app(app)
     mail.init_app(app)
     oauth.init_app(app)
+    if not app.config.get('GOOGLE_ENABLED'):
+        return
     oauth.register(
         name='google',
         client_id=app.config['GOOGLE_CLIENT_ID'],

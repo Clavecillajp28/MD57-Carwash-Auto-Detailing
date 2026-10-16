@@ -7,7 +7,8 @@ is LATE_MINUTES or more past their booked time gets an in-app notice - and
 another only if it slips a further LATE_MINUTES. Walk-ins don't push a
 booked car back (the booked-slot hold, slot_hold.py), so they aren't counted.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from database import get_db_connection
 from scheduling import GAP_MINUTES, OVERDUE_ALLOWANCE
@@ -36,13 +37,16 @@ def notify_late_bookings(now=None):
         FROM reservations r
         JOIN services s ON s.service_id = r.service_id
         LEFT JOIN vehicle_types vt ON vt.type_name = r.vehicle_type
-        WHERE r.queue_status = 'in_progress' OR (r.queue_status = 'waiting' AND r.booking_date = ?)
+        WHERE r.queue_status IN ('in_progress','pending_confirmation') OR (r.queue_status = 'waiting' AND r.booking_date = ?)
         """,
         (today,),
     ).fetchall()
 
     notices = []
     for bay in sorted({r['assigned_bay'] for r in rows}):
+        if any(r['assigned_bay']==bay and r['queue_status']=='pending_confirmation' for r in rows):
+            # No reliable new start time exists until a manager confirms.
+            continue
         free_at = now
         for car in (r for r in rows if r['assigned_bay'] == bay and r['queue_status'] == 'in_progress'):
             try:

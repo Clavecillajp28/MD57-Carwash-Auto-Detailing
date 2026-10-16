@@ -21,7 +21,9 @@ template_dir = os.path.join(BASE_DIR, '_Frontend', 'templates')
 static_dir = os.path.join(BASE_DIR, '_Frontend', 'static')
 LOGO_PATH = os.path.join(static_dir, 'images', 'md57logo.jpg')
 
-# Overridable so the test suite (tests/conftest.py) runs against throwaway
+# Overridable so the test suite runs against throwaway
 # files instead of the real dev database and audit log.
-DB_FILE = os.environ.get('MD57_DB_FILE') or os.path.join(BASE_DIR, 'md57_carwash.db')
-ACTIVITY_LOG_FILE = os.environ.get('MD57_ACTIVITY_LOG') or os.path.join(BASE_DIR, 'system_activity.log')
+DATA_DIR = os.path.abspath(os.environ.get('MD57_DATA_DIR') or BASE_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_FILE = os.environ.get('MD57_DB_FILE') or os.path.join(DATA_DIR, 'md57_carwash.db')
+ACTIVITY_LOG_FILE = os.environ.get('MD57_ACTIVITY_LOG') or os.path.join(DATA_DIR, 'system_activity.log')

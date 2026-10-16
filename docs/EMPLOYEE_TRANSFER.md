@@ -17,11 +17,14 @@ are skipped so no existing password or role is overwritten.
 2. The private encrypted file is written to
    `.runtime/employee-transfer.md57employees`. It is excluded from Git and Vercel
    uploads. Keep it private; it contains account details and password hashes.
-3. Render's `SECRET_KEY` must match the local `.env` value used to create this
-   file. Do not change an existing deployment's secret just to import: changing
-   that key invalidates sessions and can make existing encrypted MFA and mail
-   payloads unreadable. If the keys differ, stop and arrange a separate transfer
-   key instead. Never paste the key into chat or commit it.
+3. Set the same private `MD57_EMPLOYEE_TRANSFER_KEY` on the local and hosted
+   installations. If unset locally, the exporter generates and reuses
+   `.runtime/employee-transfer.key`; configure that value privately on Render.
+   Never paste it into chat or commit it. Preserve each installation's existing
+   `SECRET_KEY`; transferring employees does not require rotating session keys.
+   Older export files remain compatible with the original session secret when
+   no separate transfer key is configured on the destination. The explicit
+   `--legacy-session-key` export flag is available only for that older workflow.
 4. Deploy the latest commit. Sign in to the hosted installation as its Owner,
    then open **Operations and recovery** (`/operations`).
 5. Under **Import existing employee logins**, choose the encrypted file and

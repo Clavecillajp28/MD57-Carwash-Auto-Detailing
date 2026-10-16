@@ -363,7 +363,7 @@
 
                     let actionButtonHtml = '';
                     if (isAdmin) {
-                        actionButtonHtml = `<button class="btn-restore" onclick="openConfirmModal(${Number(item.id)}, '${escapeJsString(plate)}')">Restore</button>`;
+                        actionButtonHtml = `<button class="btn-restore" ${actionAttributes('openConfirmModal', [Number(item.id), plate])}>Restore</button>`;
                     }
 
                     container.innerHTML += `
@@ -455,5 +455,6 @@
                 body.innerHTML = '<tr><td colspan="6" style="padding:14px; text-align:center; color: var(--accent-red);">Failed to load archive.</td></tr>';
             });
     }
+registerActions({openConfirmModal});
 </script>
 {% endblock %}

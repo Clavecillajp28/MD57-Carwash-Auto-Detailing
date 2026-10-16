@@ -4,7 +4,7 @@ import os
 import re
 import sqlite3
 import tempfile
-from datetime import datetime
+from shop_clock import datetime
 
 from flask import Blueprint, jsonify, request, send_file, session
 
@@ -40,8 +40,8 @@ def api_create_user():
         return jsonify(status='error', message=str(e)), 400
     except RuntimeError as e:
         return jsonify(status='error', message=str(e)), 503
-    log_activity(session['user'], 'Sent employee invitation')
-    return jsonify(status='success', message='Invitation emailed. The employee will choose their own password.')
+    log_activity(session['user'], 'Submitted employee invitation to email provider')
+    return jsonify(status='success', message='Invitation submitted to the email provider. Check delivery in Operations; the employee will choose their own password.')
 
 
 @admin_api_bp.route('/api/admin/users', methods=['GET'])
@@ -133,7 +133,7 @@ def api_admin_reset_user_password():
     except RuntimeError as e:
         return jsonify(status='error',message=str(e)),503
     log_activity(session['user'],f"Sent password recovery for account ID {user['user_id']}")
-    return jsonify(status='success',message='Recovery email sent. Existing sessions have been revoked.')
+    return jsonify(status='success',message='Recovery email submitted to the provider. Existing sessions have been revoked.')
 
 
 @admin_api_bp.route('/api/admin/set-account-role', methods=['POST'])

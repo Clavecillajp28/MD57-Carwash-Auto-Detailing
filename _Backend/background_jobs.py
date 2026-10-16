@@ -1,5 +1,5 @@
 """Import-safe background startup with cross-process leases and run health."""
-from datetime import datetime
+from shop_clock import datetime
 import os
 import logging
 import threading

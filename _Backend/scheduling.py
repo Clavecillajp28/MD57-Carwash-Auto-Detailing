@@ -11,16 +11,16 @@ extra) plus a clean-up gap. A time is offered only when:
 Times run every SLOT_MINUTES from opening. The server checks again when a
 booking is made or moved, so two customers can't take the same time.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from database import get_db_connection
 from utils import ACTIVE_BOOKING_STATUSES, BOOKING_TIME_FORMAT, parse_booking_datetime
+from timing_policy import OPEN_HOUR, CLOSE_HOUR, GAP_MINUTES, OVERDUE_ALLOWANCE
 
 SLOT_MINUTES = 30
-GAP_MINUTES = 10
-OPEN_MINUTE = 8 * 60          # 8:00 AM
-CLOSE_MINUTE = 21 * 60        # 9:00 PM - a booked service must be done by then
-OVERDUE_ALLOWANCE = 5         # a car past its estimate is assumed to need ~5 more minutes
+OPEN_MINUTE = OPEN_HOUR * 60
+CLOSE_MINUTE = CLOSE_HOUR * 60
 _GAP = timedelta(minutes=GAP_MINUTES)
 
 
@@ -81,7 +81,7 @@ def bay_busy_until(cursor, bay, now=None, exclude_reservation_id=None):
         JOIN services s ON s.service_id = r.service_id
         LEFT JOIN vehicle_types vt ON vt.type_name = r.vehicle_type
         WHERE r.assigned_bay = ? AND r.reservation_id != ?
-          AND (r.queue_status = 'in_progress'
+          AND (r.queue_status IN ('in_progress', 'pending_confirmation')
                OR (r.queue_status = 'waiting' AND (r.booking_date IS NULL OR r.booking_date = '')))
         ORDER BY r.queue_status = 'waiting', r.reservation_id
         """,
@@ -89,6 +89,10 @@ def bay_busy_until(cursor, bay, now=None, exclude_reservation_id=None):
     ).fetchall()
     free_at = now
     for row in rows:
+        if row['queue_status'] == 'pending_confirmation':
+            # Confirmation has no predictable finish. Do not offer another
+            # same-day slot in an occupied bay until that transition occurs.
+            return now.replace(hour=CLOSE_HOUR, minute=0, second=0, microsecond=0)
         if row['queue_status'] == 'in_progress':
             try:
                 started = datetime.strptime(row['started_at'], '%Y-%m-%d %H:%M:%S')

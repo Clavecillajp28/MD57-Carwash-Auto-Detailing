@@ -46,6 +46,21 @@ def install(conn):
             updated_by_name TEXT, updated_at TEXT NOT NULL, manager_reviewed_by INTEGER,
             manager_reviewed_at TEXT);
     ''')
+    outbox_columns = {r[1] for r in conn.execute('PRAGMA table_info(mail_outbox)')}
+    for name, definition in (('provider_message_id', 'TEXT'), ('delivered_at', 'TEXT'), ('event_timestamp', 'REAL NOT NULL DEFAULT 0')):
+        if name not in outbox_columns:
+            conn.execute(f'ALTER TABLE mail_outbox ADD COLUMN {name} {definition}')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_outbox_provider ON mail_outbox(provider_message_id)')
+    conn.execute('''CREATE TABLE IF NOT EXISTS mail_delivery_events (
+        provider_message_id TEXT NOT NULL, recipient TEXT NOT NULL,
+        event_timestamp REAL NOT NULL, state TEXT NOT NULL,
+        PRIMARY KEY(provider_message_id,recipient,event_timestamp,state))''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS booking_requests (
+        actor_id INTEGER NOT NULL, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL,
+        response_json TEXT NOT NULL, created_at TEXT NOT NULL,
+        PRIMARY KEY(actor_id,request_key))''')
+    # Old "sent" rows only prove submission, never recipient delivery.
+    conn.execute("UPDATE mail_outbox SET status='accepted' WHERE status='sent'")
     mfa_columns = {r[1] for r in conn.execute('PRAGMA table_info(owner_mfa)')}
     for name, definition in (('method', "TEXT NOT NULL DEFAULT 'totp'"), ('email', 'TEXT')):
         if name not in mfa_columns:
@@ -53,6 +68,8 @@ def install(conn):
     for table in ('reservations','reservations_archive'):
         if 'checklist_required' not in {r[1] for r in conn.execute(f'PRAGMA table_info({table})')}:
             conn.execute(f'ALTER TABLE {table} ADD COLUMN checklist_required INTEGER NOT NULL DEFAULT 0')
+        conn.execute(f'''CREATE INDEX IF NOT EXISTS idx_{table}_history_closed ON {table}
+            (COALESCE(is_synthetic,0),COALESCE(picked_up_at,completed_at,cancelled_at))''')
     # Only human-readable operational values are audited: credentials, MFA
     # secrets, OTPs, invitation tokens and uploaded ID images are excluded.
     tables = {
@@ -74,15 +91,17 @@ def install(conn):
         def snapshot(prefix):
             return 'json_object(' + ','.join(f"'{c}',{prefix}.{c}" for c in fields) + ')'
         changes = ' OR '.join(f'OLD.{c} IS NOT NEW.{c}' for c in fields)
+        conn.execute(f'DROP TRIGGER IF EXISTS audit_{table}_update')
         conn.execute(f'''CREATE TRIGGER IF NOT EXISTS audit_{table}_update AFTER UPDATE ON {table}
             WHEN {changes} BEGIN
             INSERT INTO audit_records(occurred_at,actor_id,actor_name,entity,entity_id,action,reason,before_json,after_json)
-            VALUES(datetime('now','localtime'),audit_actor_id(),audit_actor_name(),'{table}',NEW.{key},
+            VALUES(shop_now(),audit_actor_id(),audit_actor_name(),'{table}',NEW.{key},
                 'update',audit_reason(),{snapshot('OLD')},{snapshot('NEW')}); END''')
         for event,prefix in (('INSERT','NEW'),('DELETE','OLD')):
+            conn.execute(f'DROP TRIGGER IF EXISTS audit_{table}_{event.lower()}')
             before=snapshot('OLD') if event=='DELETE' else 'NULL'
             after=snapshot('NEW') if event=='INSERT' else 'NULL'
             conn.execute(f'''CREATE TRIGGER IF NOT EXISTS audit_{table}_{event.lower()} AFTER {event} ON {table}
                 BEGIN INSERT INTO audit_records(occurred_at,actor_id,actor_name,entity,entity_id,action,reason,before_json,after_json)
-                VALUES(datetime('now','localtime'),audit_actor_id(),audit_actor_name(),'{table}',{prefix}.{key},
+                VALUES(shop_now(),audit_actor_id(),audit_actor_name(),'{table}',{prefix}.{key},
                     '{event.lower()}',audit_reason(),{before},{after}); END''')

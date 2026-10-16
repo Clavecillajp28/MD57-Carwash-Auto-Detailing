@@ -1,5 +1,6 @@
 """Opt-in, atomic demo history. Never represents observed shop operations."""
-from datetime import date, datetime, time, timedelta
+from datetime import time, timedelta
+from shop_clock import date, datetime
 import json
 import random
 import secrets

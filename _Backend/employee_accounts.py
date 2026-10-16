@@ -4,7 +4,8 @@ import re
 import secrets
 import sqlite3
 from password_policy import password_error
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from flask import current_app, url_for
 

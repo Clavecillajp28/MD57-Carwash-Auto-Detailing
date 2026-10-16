@@ -282,6 +282,8 @@
     // matching the search box and the From/To dates.
     let filteredHistoryData = [];
     let currentPage = 1;
+    let historyTotal = 0;
+    let searchTimer;
     const itemsPerPage = 5;
     const historyCanPresent = {{ (role == 'admin')|tojson }};
     let historySource = historyCanPresent && new URLSearchParams(location.search).get('source') === 'synthetic' ? 'synthetic' : 'real';
@@ -320,7 +322,9 @@
                 : 'Actual services handled by your employees. Presentation history is excluded.';
             document.getElementById('historyAnalyticsLink').href = '/analytics?days=90&source=' + source;
         }
-        fetch('/api/get-history?source=' + source)
+        const query = historyQuery();
+        if (focusBookingId) query.set('booking_id', String(focusBookingId));
+        fetch('/api/get-history?' + query)
             .then(res => res.json())
             .then(data => {
                 if (sequence !== historyLoadSeq) return;
@@ -334,7 +338,10 @@
                 // plate (the backend's vehicles.py), not just the rows
                 // this page was given.
                 globalHistoryData = (data.status === 'success' && Array.isArray(data.data)) ? data.data : [];
-                applyHistorySearch();
+                historyTotal = data.total || 0;
+                currentPage = data.page || 1;
+                filteredHistoryData = globalHistoryData;
+                renderTablePage();
 
                 if (focusBookingId) {
                     const reservationId = focusBookingId;
@@ -367,19 +374,15 @@
     // actually shows, so "search" always finds what's on screen.
     // ...and the From/To dates, by when the record was closed out - the
     // same period Analytics uses, so an export can match a report.
+    function historyQuery() {
+        return new URLSearchParams({source:historySource,page:String(currentPage),limit:String(itemsPerPage),
+            search:document.getElementById('historySearchInput').value.trim(),
+            start:document.getElementById('historyFrom').value,end:document.getElementById('historyTo').value});
+    }
     function applyHistorySearch() {
-        let query = (document.getElementById('historySearchInput').value || '').trim().toLowerCase();
-        filteredHistoryData = globalHistoryData.filter(car => {
-            if (!inDateRange(closedAt(car), 'historyFrom', 'historyTo')) return false;
-            if (!query) return true;
-            let haystack = [
-                car.plate_number, car.customer_name, car.service_type, car.vehicle_model,
-                car.washer, car.cancel_reason, car.status,
-            ].filter(Boolean).join(' ').toLowerCase();
-            return haystack.includes(query);
-        });
         currentPage = 1;
-        renderTablePage();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(loadHistoryData, 200);
     }
 
     function clearHistoryDates() {
@@ -394,7 +397,7 @@
 
         container.innerHTML = '';
 
-        let totalItems = filteredHistoryData.length;
+        let totalItems = historyTotal;
         let totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
         if (currentPage > totalPages) currentPage = totalPages;
@@ -411,10 +414,10 @@
 
         let start = (currentPage - 1) * itemsPerPage;
         let end = start + itemsPerPage;
-        let paginatedItems = filteredHistoryData.slice(start, end);
+        let paginatedItems = filteredHistoryData;
 
         paginatedItems.forEach((car, idx) => {
-            let globalIndex = start + idx;
+            let globalIndex = idx;
             let isCancelled = car.status === 'cancelled';
             let rawDate = closedAt(car);
             let custName = car.customer_name || 'N/A';
@@ -465,7 +468,7 @@
 
     function changePage(direction) {
         currentPage += direction;
-        renderTablePage();
+        loadHistoryData();
     }
 
     function openDetailsModal(index) {
@@ -532,33 +535,9 @@
 
     // Exports what's listed - the dates and search applied.
     function exportHistoryCSV() {
-        if (!filteredHistoryData || filteredHistoryData.length === 0) {
-            showToast('Nothing to Export', 'No history records match the dates and search.', 'error');
-            return;
-        }
-
-        // Already sorted newest-first by the server (/api/get-history
-        // orders by pickup, completion or cancellation DESC), so no
-        // client-side re-sort needed.
-        downloadCSV(`md57_${historySource === 'synthetic' ? 'presentation' : 'live'}_history_${dateRangeLabel('historyFrom', 'historyTo')}.csv`,
-            ['Customer Name', 'Email', 'Plate Number', 'Car Model', 'Visits', 'Last Visit', 'Usual Return (days)', 'Service Type', 'Vehicle Type', 'Outcome', 'Timestamp', 'Wash Finished At', 'Picked Up At', 'Pickup Confirmed By', 'Record Source'],
-            filteredHistoryData.map(car => [
-                car.customer_name || 'N/A',
-                car.email || 'N/A',
-                car.plate_number,
-                car.vehicle_model || '',
-                car.visit_count || 0,
-                car.last_visit || '',
-                car.usual_return_days != null ? car.usual_return_days : '',
-                car.service_type,
-                car.vehicle_type || 'Vehicle',
-                car.status === 'cancelled' ? 'Cancelled' : 'Completed',
-                closedAt(car),
-                car.completed_at || '',
-                car.picked_up_at || '',
-                car.picked_up_by_name || '',
-                car.is_synthetic ? 'Simulated records' : 'Live operations',
-            ]));
+        const params = historyQuery();
+        params.set('format', 'csv');
+        window.location.assign('/api/get-history?' + params);
     }
 
 </script>

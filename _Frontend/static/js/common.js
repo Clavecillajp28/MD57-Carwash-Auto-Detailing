@@ -7,10 +7,12 @@
     // Attach the CSRF token to every non-GET fetch automatically, so page
     // scripts never have to remember to do it themselves.
     const originalFetch = window.fetch;
+    const bookingKeys = new Map();
     window.fetch = function(url, options) {
         options = options || {};
         const method = (options.method || 'GET').toUpperCase();
-        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        const sameOrigin = new URL(url instanceof Request ? url.url : url, location.href).origin === location.origin;
+        if (sameOrigin && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             if (token) {
                 if (options.headers instanceof Headers) {
@@ -23,7 +25,25 @@
                 }
             }
         }
+        // Retain a key after a lost/5xx response, including a page refresh.
+        // A changed form or a confirmed response gets a fresh request key.
+        const booking = method === 'POST' && String(url) === '/api/submit-booking';
+        let bookingBody;
+        if (booking && typeof options.body === 'string') {
+            bookingBody = options.body;
+            let pending;
+            try { pending = JSON.parse(sessionStorage.getItem('md57_pending_booking') || 'null'); } catch (_) {}
+            const key = pending?.body === bookingBody ? pending.key : (bookingKeys.get(bookingBody) || crypto.randomUUID());
+            bookingKeys.set(bookingBody, key);
+            try { sessionStorage.setItem('md57_pending_booking', JSON.stringify({body:bookingBody, key})); } catch (_) {}
+            options.headers = new Headers(options.headers || {});
+            options.headers.set('Idempotency-Key', key);
+        }
         return originalFetch(url, options).then(async response=>{
+            if (booking && response.status < 500) {
+                bookingKeys.delete(bookingBody);
+                try { sessionStorage.removeItem('md57_pending_booking'); } catch (_) {}
+            }
             if(response.status===403&&String(url).startsWith('/api/')){
                 const data=await response.clone().json().catch(()=>null);
                 if(data?.code==='step_up_required') window.location.assign('/account-security');
@@ -105,6 +125,7 @@ window.addEventListener('resize', () => {
 // else signs out immediately.
 async function handleLogout() {
     if (!(await confirmDialog("You will need to sign in again to continue.", { title: 'Sign out?', confirmText: 'Sign Out' }))) return;
+    try { sessionStorage.removeItem('md57_pending_booking'); } catch (_) {}
     const farewell = document.getElementById('logoutAnimationModal');
     if (!farewell) {
         startPageProgress();
@@ -201,22 +222,25 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-// Escapes a value for safe insertion as a single-quoted JS string literal
-// argument inside an onclick="...('...')" attribute. HTML-escaping alone
-// is NOT enough here: the browser HTML-decodes the attribute value back
-// to raw text before handing it to the JS engine, so an HTML-escaped
-// quote (&#39;) still decodes back into a literal ' and breaks out of
-// the string. This escapes backslashes/quotes for the JS parser AND
-// escapes double quotes for the surrounding HTML attribute boundary.
-function escapeJsString(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'")
-        .replace(/"/g, '&quot;')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '');
+const md57Actions = new Map();
+function registerActions(actions) {
+    for (const [name, handler] of Object.entries(actions)) md57Actions.set(name, handler);
 }
+function actionAttributes(name, args = []) {
+    return `data-md57-action="${escapeHtml(name)}" data-md57-args="${escapeHtml(JSON.stringify(args))}"`;
+}
+function dispatchAction(event) {
+    if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+    const element = event.target.closest('[data-md57-action]');
+    if (!element || (event.type === 'keydown' && element.tagName === 'BUTTON')) return;
+    const handler = md57Actions.get(element.dataset.md57Action);
+    if (!handler) return;
+    event.preventDefault();
+    const args = JSON.parse(element.dataset.md57Args || '[]');
+    handler(...args);
+}
+document.addEventListener('click', dispatchAction);
+document.addEventListener('keydown', dispatchAction);
 
 // --- IN-APP NOTIFICATION CENTER (bell icon in base.html's header) ---
 // Independent of email/Gmail preferences by design (see the backend's
@@ -390,7 +414,7 @@ function serviceEstimateLines(estimate) {
 }
 
 function serviceEstimateSummary(estimate) {
-    return serviceEstimateLines(estimate).join(' · ');
+    return serviceEstimateLines(estimate).join(' Â· ');
 }
 
 function renderServiceEstimate(container, estimate) {
@@ -450,7 +474,7 @@ function loadKpiStrip(prefix = 'home') {
 // way the old hardcoded "3 services"/"4 vehicle types" copies eventually did.
 function formatPeso(amount) {
     if (amount === null || amount === undefined || amount === '') return 'N/A';
-    return '₱' + Number(amount).toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    return 'â‚±' + Number(amount).toLocaleString('en-PH', { maximumFractionDigits: 0 });
 }
 
 async function fetchServiceCatalog() {
@@ -629,8 +653,8 @@ function formatMinutes(minutes) {
     return rest ? `${h} h ${rest} min` : `${h} h`;
 }
 
-// A booking's day ('YYYY-MM-DD') and time ('09:00 AM') as "Today · 9:00 AM",
-// "Tomorrow · 11:30 AM" or "Thu, Oct 8 · 1:30 PM" (the year only when it
+// A booking's day ('YYYY-MM-DD') and time ('09:00 AM') as "Today Â· 9:00 AM",
+// "Tomorrow Â· 11:30 AM" or "Thu, Oct 8 Â· 1:30 PM" (the year only when it
 // isn't this year).
 function formatBookingWhen(dateStr, timeStr) {
     const time = (timeStr || '').replace(/^0(\d)/, '$1');
@@ -646,10 +670,10 @@ function formatBookingWhen(dateStr, timeStr) {
             ...(y !== new Date().getFullYear() ? { year: 'numeric' } : {}),
         });
     }
-    return time ? `${day} · ${time}` : day;
+    return time ? `${day} Â· ${time}` : day;
 }
 
-// A server timestamp ('YYYY-MM-DD HH:MM:SS') the same way: "Today · 2:22 PM".
+// A server timestamp ('YYYY-MM-DD HH:MM:SS') the same way: "Today Â· 2:22 PM".
 function formatTimestamp(sqlTimestamp, fallback = 'N/A') {
     const ms = parseServerDateTime(sqlTimestamp);
     if (ms === null) return sqlTimestamp || fallback;
@@ -716,7 +740,8 @@ function dateRangeLabel(fromId, toId) {
 
 function downloadCSV(filename, header, rows) {
     const cell = value => {
-        const text = value === null || value === undefined ? '' : String(value);
+        let text = value === null || value === undefined ? '' : String(value);
+        if (typeof value === 'string' && /^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
         return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
     const csv = [header, ...rows].map(row => row.map(cell).join(',')).join('\r\n');

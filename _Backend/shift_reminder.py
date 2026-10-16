@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from database import get_db_connection
 from utils import send_branded_email, start_periodic_worker, get_latest_attendance, notify_role

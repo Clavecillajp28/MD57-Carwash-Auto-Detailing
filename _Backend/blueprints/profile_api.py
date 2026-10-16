@@ -1,6 +1,7 @@
 """Self-service profiles. Account identity and permission changes stay separate."""
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 import hashlib
 import hmac
 import re

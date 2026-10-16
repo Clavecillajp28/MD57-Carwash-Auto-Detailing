@@ -16,7 +16,7 @@ FIELDS = ('username', 'fullname', 'password_hash', 'role', 'auth_provider',
 
 def _cipher(secret):
     if not secret:
-        raise ValueError('SECRET_KEY must be configured on both installations.')
+        raise ValueError('Configure the same MD57_EMPLOYEE_TRANSFER_KEY on both installations.')
     if isinstance(secret, str):
         secret = secret.encode()
     key = hashlib.sha256(b'md57-employee-transfer-v1:' + secret).digest()
@@ -43,7 +43,7 @@ def import_employees(token, secret):
     try:
         data = json.loads(_cipher(secret).decrypt(token))
     except (InvalidToken, ValueError, UnicodeDecodeError, TypeError):
-        raise ValueError('Cannot read this transfer. Use the original file and the same SECRET_KEY as the local installation.') from None
+        raise ValueError('Cannot read this transfer. Use the original file and matching transfer key. Legacy files use the original SECRET_KEY.') from None
     if not isinstance(data, dict) or data.get('format') != 'md57-employees-v1':
         raise ValueError('Unsupported employee transfer file.')
     rows = data.get('employees')
@@ -90,11 +90,25 @@ def import_employees(token, secret):
 if __name__ == '__main__':
     import argparse
     import os
+    import secrets
     from config import DB_FILE, BASE_DIR
     parser = argparse.ArgumentParser(description='Export active employee logins for private Owner import.')
     parser.add_argument('--output', default=str(Path(BASE_DIR) / '.runtime' / 'employee-transfer.md57employees'))
+    parser.add_argument('--legacy-session-key', action='store_true', help='Explicit compatibility export using the existing session secret.')
     args = parser.parse_args()
-    token, count = export_employees(DB_FILE, os.environ.get('SECRET_KEY'))
+    transfer_key=os.environ.get('MD57_EMPLOYEE_TRANSFER_KEY')
+    if not transfer_key and args.legacy_session_key:
+        transfer_key=os.environ.get('SECRET_KEY')
+    if not transfer_key:
+        key_path=Path(BASE_DIR)/'.runtime'/'employee-transfer.key'
+        key_path.parent.mkdir(parents=True,exist_ok=True)
+        if not key_path.exists():
+            descriptor=os.open(key_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(descriptor,'w',encoding='utf-8') as stream:
+                stream.write(secrets.token_urlsafe(48))
+        transfer_key=key_path.read_text(encoding='utf-8').strip()
+        print(f'Set MD57_EMPLOYEE_TRANSFER_KEY on the destination from private file {key_path}.')
+    token, count = export_employees(DB_FILE, transfer_key)
     target = Path(args.output)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(token)

@@ -16,9 +16,9 @@ def allowed(booking):
 
 
 def readiness(conn,booking,manager=False):
-    if not booking['checklist_required']: return None
     if session.get('role')=='staff' and booking['assigned_staff_id']!=session.get('user_id'):
         return jsonify(status='error',message='Only the assigned washer can mark this service done.'),403
+    if not booking['checklist_required']: return None
     check=conn.execute('SELECT * FROM service_checks WHERE reservation_id=?',(booking['reservation_id'],)).fetchone()
     if not check or not all(json.loads(check['steps_json']).get(key) is True for key in STEPS):
         return jsonify(status='error',message='Complete the service quality checklist before marking this job done.',checklist_url=f'/service-checklist/{booking["reservation_id"]}'),409

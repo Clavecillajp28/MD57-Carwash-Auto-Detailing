@@ -15,9 +15,11 @@ Walk-ins and later bookings are still accepted and queued - this only
 decides what may be *started* (see api_start_service). Bookings staff enter
 on someone's behalf are scheduled but not protected.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from utils import parse_booking_datetime
+from timing_policy import GAP_MINUTES
 
 HOLD_AFTER_BOOKED_MINUTES = 10
 # booking_source of a booking a customer made from their own account -
@@ -59,7 +61,7 @@ def holding_booking(candidate, protected, now):
     assigned_bay, duration_minutes) being started right now, or None if it
     may start. A protected booking is never held by one whose slot comes
     after its own."""
-    would_finish = now + timedelta(minutes=candidate['duration_minutes'] or 0)
+    would_finish = now + timedelta(minutes=(candidate['duration_minutes'] or 0) + GAP_MINUTES)
     own = next((b for b in protected if b['reservation_id'] == candidate['reservation_id']), None)
     for booking in protected:
         if booking is own or booking['assigned_bay'] != candidate['assigned_bay']:

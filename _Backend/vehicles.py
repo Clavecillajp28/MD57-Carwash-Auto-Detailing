@@ -9,7 +9,7 @@ A visit is one vehicle on one calendar day with at least one finished
 service ('ready' or 'completed'). Two services on the same day are one
 visit; cancelled and no-show bookings are none."""
 import re
-from datetime import datetime
+from shop_clock import datetime
 from statistics import median
 
 from database import get_db_connection
@@ -39,21 +39,53 @@ def canonical_vehicle_model(cursor, typed):
     return by_short_name[0] if len(by_short_name) == 1 else text
 
 
-def vehicle_visits(source='real'):
+def vehicle_visits(source='real', plates=None, since=None, until=None):
     """{plate key: {'days': [date, ...] oldest first, 'model': the most
     recently recorded model for that plate, or None}} for every vehicle
     with at least one visit."""
     conn = get_db_connection()
-    rows = conn.execute(
+    conn.create_function('plate_key', 1, plate_key, deterministic=True)
+    keys = sorted({plate_key(plate) for plate in plates}) if plates is not None else None
+    if keys is not None and len(keys)>500:
+        conn.close()
+        result={}
+        for offset in range(0,len(keys),500):
+            result.update(vehicle_visits(source,keys[offset:offset+500],since,until))
+        return result
+    if keys == []:
+        conn.close()
+        return {}
+    clause = ' AND plate_key(vehicle_plate_number) IN ('+','.join('?' for _ in keys)+')' if keys else ''
+    query = (
         f"""
+        SELECT * FROM (
         SELECT vehicle_plate_number, substr(completed_at, 1, 10) AS day, vehicle_model
         FROM reservations r
         WHERE queue_status IN ('ready', 'completed')
           AND completed_at IS NOT NULL AND completed_at != ''
-          AND {source_sql(source, 'r')}
-        ORDER BY completed_at
+          AND {source_sql(source, 'r')}{clause}
+        UNION ALL
+        SELECT vehicle_plate_number, substr(completed_at, 1, 10) AS day, vehicle_model
+        FROM reservations_archive r
+        WHERE queue_status IN ('ready', 'completed')
+          AND completed_at IS NOT NULL AND completed_at != ''
+          AND {source_sql(source, 'r')}{clause}
+          AND NOT EXISTS (SELECT 1 FROM reservations live WHERE live.reservation_id=r.reservation_id)
+        )
         """
-    ).fetchall()
+    )
+    params = (keys or []) * 2
+    if until is not None:
+        query='SELECT * FROM ('+query+') WHERE day<=?'
+        params.append(until.isoformat())
+    if since is not None:
+        # Keep the immediately preceding visit for return intervals, without
+        # materializing each car's lifetime bookings in application memory.
+        query='''WITH visits AS ('''+query+'''), windowed AS (
+            SELECT *,MAX(CASE WHEN day<? THEN day END) OVER (PARTITION BY plate_key(vehicle_plate_number)) AS previous_day FROM visits)
+            SELECT vehicle_plate_number,day,vehicle_model FROM windowed WHERE day>=? OR day=previous_day'''
+        params.extend([since.isoformat(),since.isoformat()])
+    rows = conn.execute(query+' ORDER BY day', params).fetchall()
     conn.close()
 
     vehicles = {}

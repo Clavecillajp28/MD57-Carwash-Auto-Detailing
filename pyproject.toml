@@ -16,7 +16,5 @@ dependencies = [
     "numpy==2.5.3",
     "pandas==3.0.5",
     "scikit-learn==1.9.0",
+    "tzdata>=2025.2",
 ]
-
-[tool.vercel]
-entrypoint = "_Backend/app.py"

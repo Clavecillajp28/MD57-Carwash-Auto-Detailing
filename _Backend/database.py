@@ -1,6 +1,7 @@
 import os
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from werkzeug.security import generate_password_hash
 from password_policy import password_error
@@ -38,6 +39,7 @@ def get_db_connection():
     conn = sqlite3.connect(DB_FILE, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.create_function('shop_now', 0, lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     from flask import has_request_context, session, request
     conn.create_function('audit_actor_id', 0, lambda: session.get('user_id') if has_request_context() else None)
     conn.create_function('audit_actor_name', 0, lambda: (session.get('fullname') or session.get('user') or 'System') if has_request_context() else 'System')
@@ -883,6 +885,7 @@ def init_db():
         )
     """)
 
+    models_existed = cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='vehicle_models'").fetchone()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vehicle_models (
             model_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -905,22 +908,20 @@ def init_db():
         'Yamaha NMAX', 'Yamaha Aerox', 'Yamaha Mio', 'Yamaha Sniper',
         'Suzuki Raider', 'Kawasaki Barako',
     ]
-    cursor.executemany("INSERT OR IGNORE INTO vehicle_models (model_name) VALUES (?)",
-                       [(name,) for name in default_vehicle_models])
+    if not models_existed:
+        cursor.executemany("INSERT OR IGNORE INTO vehicle_models (model_name) VALUES (?)",
+                           [(name,) for name in default_vehicle_models])
 
-    # Seed Feedbacks if empty
-    cursor.execute("SELECT COUNT(*) FROM feedbacks")
-    if cursor.fetchone()[0] == 0:
-        sample_feedbacks = [
-            ("Juan Dela Cruz", "ABC-1234", "Body Wash", 5, "Super linis at mabilis ang serbisyo!", (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')),
-            ("Maria Santos", "XYZ-9876", "Full Body Wash & Detailing", 4, "Maganda ang gawa, worth it po.", (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')),
-            ("Carlo Reyes", "NDB-5421", "Express & Foam", 5, "Sobrang kintab ng sasakyan ko!", datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-            ("Elena Gomez", "KLP-1122", "Body Wash", 4, "Mababait ang mga washers, recommend ko ito.", (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S'))
-        ]
-        cursor.executemany('''
-            INSERT INTO feedbacks (customer_name, plate_number, service_type, rating, comment, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', sample_feedbacks)
+    # Legacy unlinked fixture reviews are quarantined, never counted as live.
+    if 'is_synthetic' not in _column_names(cursor, 'feedbacks'):
+        cursor.execute('ALTER TABLE feedbacks ADD COLUMN is_synthetic INTEGER NOT NULL DEFAULT 0')
+    fixtures = [
+        ('Juan Dela Cruz', 'ABC-1234', 'Body Wash', 5, 'Super linis at mabilis ang serbisyo!'),
+        ('Maria Santos', 'XYZ-9876', 'Full Body Wash & Detailing', 4, 'Maganda ang gawa, worth it po.'),
+        ('Carlo Reyes', 'NDB-5421', 'Express & Foam', 5, 'Sobrang kintab ng sasakyan ko!'),
+        ('Elena Gomez', 'KLP-1122', 'Body Wash', 4, 'Mababait ang mga washers, recommend ko ito.'),
+    ]
+    cursor.executemany("UPDATE feedbacks SET is_synthetic=1 WHERE reservation_id IS NULL AND customer_name=? AND plate_number=? AND service_type=? AND rating=? AND comment=?", fixtures)
 
     # Service finish, notification and physical collection are separate events.
     # Leave historical rows NULL: old "completed" records do not prove pickup.

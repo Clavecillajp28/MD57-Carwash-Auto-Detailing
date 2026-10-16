@@ -1,7 +1,9 @@
 
 import os
 import sys
+from urllib.parse import urlsplit
 from datetime import timedelta
+
 
 # Ensure Python can find modules inside _Backend/
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +46,13 @@ def password_form_policy():
 app.config["PUBLIC_BASE_URL"] = os.environ.get(
     "PUBLIC_BASE_URL", ""
 ).rstrip("/")
+if app.config['PUBLIC_BASE_URL']:
+    public_origin=urlsplit(app.config['PUBLIC_BASE_URL'])
+    local=public_origin.hostname in ('localhost','127.0.0.1','::1')
+    if (public_origin.scheme not in (('http','https') if local else ('https',))
+            or not public_origin.netloc or public_origin.username or public_origin.password
+            or public_origin.path or public_origin.query or public_origin.fragment):
+        raise RuntimeError('PUBLIC_BASE_URL must be an HTTPS origin without a path or credentials.')
 
 app.config["BACKGROUND_JOBS_ENABLED"] = (
     os.environ.get("MD57_BACKGROUND_JOBS", "false").lower()
@@ -61,7 +70,7 @@ app.wsgi_app = ProxyFix(
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError(
-        "SECRET_KEY is not set. Add it to Vercel Environment Variables."
+        "SECRET_KEY is not set. Add it to the Flask host environment."
     )
 
 # Google OAuth configuration
@@ -70,14 +79,8 @@ app.config["GOOGLE_CLIENT_SECRET"] = os.environ.get(
     "GOOGLE_CLIENT_SECRET"
 )
 
-if (
-    not app.config["GOOGLE_CLIENT_ID"]
-    or not app.config["GOOGLE_CLIENT_SECRET"]
-):
-    raise RuntimeError(
-        "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set. "
-        "Add them to Vercel Environment Variables."
-    )
+app.config['GOOGLE_ENABLED'] = bool(app.config['GOOGLE_CLIENT_ID'] and app.config['GOOGLE_CLIENT_SECRET'])
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 
 # Session timeout
 SESSION_LIFETIME = timedelta(
@@ -99,6 +102,8 @@ app.config["SESSION_COOKIE_SECURE"] = (
 # Email configuration
 app.config['MAIL_TRANSPORT'] = os.environ.get('MAIL_TRANSPORT', 'smtp').strip().lower()
 app.config['BREVO_API_KEY'] = os.environ.get('BREVO_API_KEY')
+app.config['BREVO_WEBHOOK_TOKEN'] = os.environ.get('BREVO_WEBHOOK_TOKEN', '')
+app.config['MD57_EMPLOYEE_TRANSFER_KEY'] = os.environ.get('MD57_EMPLOYEE_TRANSFER_KEY')
 app.config["MAIL_SERVER"] = os.environ.get(
     "MAIL_SERVER", "smtp.gmail.com"
 )
@@ -192,6 +197,18 @@ def handle_http_error(e):
 
 @app.before_request
 def make_session_permanent():
+    public_base=app.config.get('PUBLIC_BASE_URL')
+    if (public_base and os.environ.get('MD57_ENFORCE_CANONICAL','true').lower() in ('true','1')
+            and request.method in ('GET','HEAD') and request.endpoint!='static'
+            and not request.path.startswith('/api/')
+            and request.host.lower()!=urlsplit(public_base).netloc.lower()):
+        return redirect(public_base+request.full_path.rstrip('?'),code=302)
+    if request.is_json:
+        body = request.get_json(silent=True)
+        from request_validation import validate_object
+        error = validate_object(body)
+        if error:
+            return jsonify(status='error', message=error), 400
     session.permanent = True
 
     if "user" not in session:
@@ -266,7 +283,7 @@ def add_header(response):
 
 
 # Initialize the database.
-# Note: persistent production storage may require an external database on Vercel.
+# SQLite and its backups must reside on the Flask host's durable private storage.
 init_db()
 
 # Opt-in for temporary presentations, including hosts without shell access.
@@ -277,10 +294,6 @@ if os.environ.get('MD57_DEMO_HISTORY', 'false').lower() in ('true', '1'):
     app.config['DEMO_HISTORY'] = seed_demo_history()
     print('[DEMO] 60 simulated workdays loaded; not evidence of real-world accuracy.')
 
-
-@app.context_processor
-def demo_history_notice():
-    return {'demo_history': app.config.get('DEMO_HISTORY')}
 
 # Register application blueprints.
 from blueprints.auth import auth_bp
@@ -309,14 +322,14 @@ app.register_blueprint(mfa_bp)
 app.register_blueprint(quality_bp)
 app.register_blueprint(operations_bp)
 
-# Background jobs should remain disabled on Vercel serverless.
+# Workers belong on the Flask host; an optional Vercel proxy runs none.
 from background_jobs import start_background_jobs
 
 if app.config["BACKGROUND_JOBS_ENABLED"]:
     start_background_jobs(app)
 
 
-# Local development only. Vercel imports the app object above.
+# Direct execution reuses this app rather than importing another instance.
 if __name__ == "__main__":
     from runtime import main
-    main()
+    main(app)

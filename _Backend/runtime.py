@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import socket
 import sys
-from datetime import datetime
+from shop_clock import datetime
 
 from config import BASE_DIR
 
@@ -78,13 +78,13 @@ def serve(application=None,host='127.0.0.1',port=5000):
             state.unlink(missing_ok=True)
 
 
-def main():
+def main(application=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',default=os.environ.get('MD57_HOST','127.0.0.1'))
     parser.add_argument('--port',type=int,default=int(os.environ.get('MD57_PORT','5000')))
     args=parser.parse_args()
     try:
-        serve(host=args.host,port=args.port)
+        serve(application=application,host=args.host,port=args.port)
     except RuntimeError as error:
         sys.exit(str(error))
 

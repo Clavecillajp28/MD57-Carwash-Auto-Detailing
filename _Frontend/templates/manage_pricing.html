@@ -239,8 +239,8 @@
                         <td>${Number(m.bookings)}</td>
                         <td><select id="mergeTarget${i}" class="model-field">${mergeOptions}</select></td>
                         <td style="white-space: nowrap;">
-                            <button class="btn-secondary btn-sm" onclick="mergeVehicleModel('${escapeJsString(m.model_name)}', document.getElementById('mergeTarget${i}').value)">Merge</button>
-                            <button class="btn-secondary btn-sm" onclick="addVehicleModel('${escapeJsString(m.model_name)}')">Add to List</button>
+                            <button class="btn-secondary btn-sm" ${actionAttributes('mergeModel', [m.model_name, i])}>Merge</button>
+                            <button class="btn-secondary btn-sm" ${actionAttributes('addVehicleModel', [m.model_name])}>Add to List</button>
                         </td>
                     </tr>
                 `).join('');
@@ -249,7 +249,7 @@
                     <tr>
                         <td>${escapeHtml(m.model_name)}</td>
                         <td>${Number(m.bookings)}</td>
-                        <td><button class="btn-secondary btn-sm" onclick="deleteVehicleModel(${Number(m.model_id)}, '${escapeJsString(m.model_name)}')">Remove</button></td>
+                        <td><button class="btn-secondary btn-sm" ${actionAttributes('deleteVehicleModel', [Number(m.model_id), m.model_name])}>Remove</button></td>
                     </tr>
                 `).join('');
             })
@@ -342,7 +342,7 @@
                                         </td>
                                     `).join('')}
                                     <td><span class="bay-badge">${escapeHtml(svc.default_bay)}</span></td>
-                                    <td><button class="toggle-active-btn deactivate" onclick="toggleServiceActive(${svc.service_id}, false, '${escapeJsString(svc.service_name)}')">Retire</button></td>
+                                    <td><button class="toggle-active-btn deactivate" ${actionAttributes('toggleServiceActive', [Number(svc.service_id), false, svc.service_name])}>Retire</button></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -365,7 +365,7 @@
                 <td>${escapeHtml(svc.service_name)}</td>
                 <td>${escapeHtml(CATEGORY_LABELS[svc.service_category] || svc.service_category)}</td>
                 <td><span class="bay-badge">${escapeHtml(svc.default_bay)}</span></td>
-                <td><button class="toggle-active-btn activate" onclick="toggleServiceActive(${svc.service_id}, true, '${escapeJsString(svc.service_name)}')">Reactivate</button></td>
+                <td><button class="toggle-active-btn activate" ${actionAttributes('toggleServiceActive', [Number(svc.service_id), true, svc.service_name])}>Reactivate</button></td>
             </tr>
         `).join('');
     }
@@ -477,5 +477,6 @@
         })
         .catch(() => showToast('Error', 'Connection error while adding service.', 'error'));
     }
+registerActions({addVehicleModel, deleteVehicleModel, toggleServiceActive, mergeModel: (name, index) => mergeVehicleModel(name, document.getElementById('mergeTarget' + index).value)});
 </script>
 {% endblock %}

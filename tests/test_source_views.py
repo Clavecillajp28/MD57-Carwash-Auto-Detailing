@@ -55,7 +55,8 @@ class SourceViewTests(unittest.TestCase):
         self.assertEqual(real['source']['key'], 'real')
         self.assertEqual([r['id'] for r in real['data']], [self.real_job])
         demo = self.client.get('/api/get-history?source=synthetic').get_json()
-        self.assertEqual(len(demo['data']), self.batch['reservations'])
+        self.assertEqual(demo['total'], self.batch['reservations'])
+        self.assertLessEqual(len(demo['data']), demo['limit'])
         self.assertTrue(all(r['is_synthetic'] == 1 for r in demo['data']))
         conn = database.get_db_connection()
         catalog = {r[0] for r in conn.execute('SELECT service_name FROM services WHERE is_active=1')}
@@ -92,9 +93,9 @@ class SourceViewTests(unittest.TestCase):
             archive_expired_cancelled_bookings()
         finally:
             utils.ACTIVITY_LOG_FILE = original_log
-        demo = self.client.get('/api/get-history?source=synthetic').get_json()['data']
-        self.assertEqual(len(demo), self.batch['reservations'])
-        self.assertTrue(all(r['is_synthetic'] == 1 for r in demo))
+        demo = self.client.get('/api/get-history?source=synthetic').get_json()
+        self.assertEqual(demo['total'], self.batch['reservations'])
+        self.assertTrue(all(r['is_synthetic'] == 1 for r in demo['data']))
 
     def test_live_duration_estimates_exclude_generated_history(self):
         from service_estimates import ServiceEstimates

@@ -73,6 +73,7 @@
                 <button type="submit" class="btn-primary">Sign In</button>
             </form>
 
+            {% if config.GOOGLE_ENABLED %}
             <div class="auth-divider">or</div>
 
             <!-- Google Sign-In Button -->
@@ -87,6 +88,7 @@
             </a>
             <p class="consent-note">By continuing with Google you agree to the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
 
+            {% endif %}
             {% if error %}
             <div id="loginError" class="error">
                 <i class="fa-solid fa-triangle-exclamation"></i> {{ error }}

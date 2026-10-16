@@ -3,7 +3,8 @@ import json
 import time
 import urllib.request
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 from functools import wraps
 
 from flask import session, request, jsonify, redirect, url_for, has_request_context, current_app
@@ -525,8 +526,7 @@ def is_staff_on_duty(staff_user_id, date_str=None):
 # MD57 operates 8:00 AM - 9:00 PM. Kept as shared constants (not scattered
 # literals) since both the booking-time validation and the walk-in check
 # below need to agree on exactly the same window.
-BUSINESS_OPEN_HOUR = 8
-BUSINESS_CLOSE_HOUR = 21  # 9:00 PM, inclusive - the last bookable hour
+from timing_policy import OPEN_HOUR as BUSINESS_OPEN_HOUR, CLOSE_HOUR as BUSINESS_CLOSE_HOUR
 
 
 def is_within_business_hours(dt):

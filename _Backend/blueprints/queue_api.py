@@ -1,6 +1,8 @@
+import hashlib
+import json
 import re
 import sqlite3
-from datetime import datetime
+from shop_clock import datetime
 
 from flask import Blueprint, current_app, jsonify, request, session
 
@@ -398,20 +400,70 @@ def api_get_history():
         params.append(session.get('user_id'))
     archive_query = query.replace('FROM reservations r', 'FROM reservations_archive r')
     archive_query += ' AND NOT EXISTS (SELECT 1 FROM reservations live WHERE live.reservation_id=r.reservation_id)'
-    cursor.execute('SELECT * FROM (' + query + ' UNION ALL ' + archive_query +
-                   ') ORDER BY COALESCE(picked_up_at, completed_at, cancelled_at) DESC, id DESC', params * 2)
-    history_records = [dict(row) for row in cursor.fetchall()]
+    combined = 'SELECT * FROM (' + query + ' UNION ALL ' + archive_query + ')'
+    filters=[]
+    values=params*2
+    if request.args.get('booking_id'):
+        booking_id=request.args.get('booking_id',type=int)
+        if booking_id is None:
+            conn.close()
+            return jsonify(status='error',message='Invalid booking ID.'),400
+        filters.append('id=?')
+        values.append(booking_id)
+    for key, op, suffix in (('start','>=',' 00:00:00'),('end','<=',' 23:59:59')):
+        value=request.args.get(key, '')
+        if value:
+            try:
+                datetime.strptime(value,'%Y-%m-%d')
+            except ValueError:
+                conn.close()
+                return jsonify(status='error',message='Use YYYY-MM-DD dates.'),400
+            filters.append('COALESCE(picked_up_at,completed_at,cancelled_at) '+op+' ?')
+            values.append(value+suffix)
+    search=request.args.get('search','').strip()[:100]
+    if search:
+        filters.append("LOWER(COALESCE(plate_number,'')||' '||COALESCE(customer_name,'')||' '||COALESCE(service_type,'')||' '||COALESCE(vehicle_model,'')||' '||COALESCE(washer,'')||' '||COALESCE(cancel_reason,'')||' '||status) LIKE ? ESCAPE '\\'")
+        values.append('%'+search.lower().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%')
+    if filters:
+        combined+=' WHERE '+' AND '.join(filters)
+    order=' ORDER BY COALESCE(picked_up_at,completed_at,cancelled_at) DESC,id DESC'
+    if request.args.get('format')=='csv':
+        import csv
+        import io
+        from flask import Response, stream_with_context
+        from spreadsheet import safe_cell
+        def stream():
+            output=io.StringIO()
+            writer=csv.writer(output)
+            def line(cells):
+                output.seek(0); output.truncate(0)
+                writer.writerow([safe_cell(cell) for cell in cells])
+                return output.getvalue()
+            try:
+                cursor.execute(combined+order, values)
+                yield '\ufeff'+line(['Customer Name','Email','Plate Number','Car Model','Visits','Last Visit','Usual Return (days)','Service Type','Vehicle Type','Outcome','Closed At','Wash Finished At','Picked Up At','Pickup Confirmed By','Record Source'])
+                while True:
+                    batch=cursor.fetchmany(100)
+                    if not batch: break
+                    visits=vehicle_visits(source=source,plates=[row['plate_number'] for row in batch])
+                    for row in batch:
+                        summary=visit_summary(visits.get(plate_key(row['plate_number'])))
+                        yield line([row['customer_name'],row['email'] or '',row['plate_number'],row['vehicle_model'],summary['visit_count'],summary['last_visit'],summary['usual_return_days'],row['service_type'],row['vehicle_type'],'Cancelled' if row['status']=='cancelled' else 'Completed',row['picked_up_at'] or row['completed_at'] or row['cancelled_at'],row['completed_at'],row['picked_up_at'],row['picked_up_by_name'],'Simulated records' if row['is_synthetic'] else 'Live operations'])
+            finally:
+                conn.close()
+        return Response(stream_with_context(stream()),mimetype='text/csv',headers={'Content-Disposition':'attachment; filename="md57_history.csv"'})
+    limit=min(100,max(1,request.args.get('limit',50,type=int)))
+    page=max(1,request.args.get('page',1,type=int))
+    total=cursor.execute('SELECT COUNT(*) FROM ('+combined+')',values).fetchone()[0]
+    page=min(page,max(1,(total+limit-1)//limit))
+    cursor.execute(combined+order+' LIMIT ? OFFSET ?',values+[limit,(page-1)*limit])
+    history_records=[dict(row) for row in cursor.fetchall()]
     conn.close()
-
-    # visit_count / last_visit / usual_return_days for each record's
-    # vehicle, counted across every completed visit on file (see
-    # vehicles.py) - not just the rows this session is shown, so a staff
-    # member's own-jobs-only history still reports a car's real totals.
-    vehicles = vehicle_visits(source=source)
+    vehicles=vehicle_visits(source=source,plates=[r['plate_number'] for r in history_records])
     for record in history_records:
         record.update(visit_summary(vehicles.get(plate_key(record['plate_number']))))
-    return jsonify({'status': 'success', 'data': history_records,
-                    'source': {'key': source, 'label': SOURCES[source]}}), 200
+    return jsonify(status='success',data=history_records,total=total,page=page,limit=limit,
+                   source={'key':source,'label':SOURCES[source]}),200
 
 
 @queue_api_bp.route('/api/available-times', methods=['GET'])
@@ -551,6 +603,7 @@ def api_reschedule_booking():
         return jsonify({'status': 'error', 'message': booking_window_message()}), 400
 
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('waiting',))
     if error:
@@ -608,6 +661,7 @@ def api_cancel_booking():
     user_id = session.get('user_id')
 
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('waiting', 'in_progress'))
     if error:
@@ -663,6 +717,7 @@ def api_cancel_booking():
 @role_required('admin')
 def api_restore_booking():
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('cancelled',))
     if error:
@@ -675,6 +730,12 @@ def api_restore_booking():
     # minute (and email the customer a second "slot released" notice).
     scheduled_dt = parse_booking_datetime(target['booking_date'], target['booking_time'])
     slot_passed = scheduled_dt is not None and scheduled_dt < datetime.now()
+    if scheduled_dt is not None and not slot_passed:
+        problem=scheduling.check_time(cursor,target['booking_date'],target['booking_time'],
+            scheduling.booking_minutes(cursor,target['reservation_id']),target['assigned_bay'],target['reservation_id'])
+        if problem:
+            conn.close()
+            return jsonify(status='error',message='The original slot is occupied. Choose a new booking time.'),409
 
     next_queue_number = _next_queue_number(cursor)
     cursor.execute("""
@@ -850,6 +911,7 @@ def api_mark_arrived():
     arrived: false undoes a mistaken check-in."""
     arrived = (request.get_json(silent=True) or {}).get('arrived', True)
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('waiting',))
     if error:
@@ -992,6 +1054,7 @@ def api_reject_complete():
     assigned_staff_id are untouched so the same staff member picks up
     where they left off."""
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('pending_confirmation',))
     if error:
@@ -1023,6 +1086,7 @@ def api_archive_ready():
     completed_at remains the wash finish used by analytics and retraining.
     """
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     target, error = _action_target(cursor, ('ready',))
     if error:
@@ -1064,6 +1128,22 @@ def api_submit_booking():
             data = request.get_json()
         else:
             data = request.form
+
+        # Replay before mutable time/staff/weather checks. The locked lookup
+        # below also handles two first-time requests arriving simultaneously.
+        request_key=request.headers.get('Idempotency-Key','')
+        fingerprint=hashlib.sha256(json.dumps(data,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        if request_key:
+            if len(request_key)>128 or not all(c.isalnum() or c in '-_' for c in request_key):
+                return jsonify(status='error',message='Invalid idempotency key.'),400
+            conn=get_db_connection()
+            previous=conn.execute('SELECT fingerprint,response_json FROM booking_requests WHERE actor_id=? AND request_key=?',
+                                  (session['user_id'],request_key)).fetchone()
+            conn.close();conn=None
+            if previous:
+                if previous['fingerprint']!=fingerprint:
+                    return jsonify(status='error',message='This request key was already used for another booking.'),409
+                return jsonify(json.loads(previous['response_json'])),200
 
         customer_name = data.get('customer_name') or data.get('name')
         plate_number = data.get('plate_number')
@@ -1136,6 +1216,8 @@ def api_submit_booking():
             if not is_within_business_hours(datetime.now()):
                 return jsonify({'status': 'error', 'message': 'MD57 is open 8:00 AM - 9:00 PM. Walk-ins can only be added during business hours.'}), 400
 
+        # External weather I/O must not hold the database write lock.
+        weather = get_weather_reading()
         conn = get_db_connection()
         # Manual transaction control: BEGIN IMMEDIATE grabs the write lock
         # up front, so a second concurrent submit-booking request blocks
@@ -1145,6 +1227,14 @@ def api_submit_booking():
         conn.isolation_level = None
         cursor = conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
+        if request_key:
+            previous=cursor.execute('SELECT fingerprint,response_json FROM booking_requests WHERE actor_id=? AND request_key=?',
+                                    (session['user_id'],request_key)).fetchone()
+            if previous:
+                conn.rollback(); conn.close()
+                if previous['fingerprint']!=fingerprint:
+                    return jsonify(status='error',message='This request key was already used for another booking.'),409
+                return jsonify(json.loads(previous['response_json'])),200
 
         # vehicle_type must be one of the configured vehicle_types rows -
         # anything else would get no size minutes and understate the time.
@@ -1161,20 +1251,8 @@ def api_submit_booking():
             }), 400
         vehicle_type = vt_row['type_name']
 
-        # NOTE ON BAY/TIME "CONFLICTS": this system is a queue (strict
-        # first-come-first-served by queue_number - see api_get_queue's own
-        # docstring), not an appointment calendar with exclusive slots. Two
-        # customers wanting the same service around the same time is normal
-        # real-world demand, not an error - the second one simply queues
-        # behind the first for that bay and is served once it's free (see
-        # api_start_service's bay-occupancy check, which is where
-        # "only one car per bay at a time" is actually enforced). This used
-        # to flatly reject a second booking that matched an existing one's
-        # exact assigned_bay/booking_date/booking_time with a 400 error -
-        # confusing for a customer who just wanted to book the same service
-        # a few minutes apart, and wrong for the underlying queue model:
-        # booking_date/booking_time are each customer's own expected
-        # arrival estimate, not a reservation of exclusive bay time.
+        # Scheduled admission reserves the bay for the service plus cleanup.
+        # Walk-ins join its queue; actual starts also enforce bay occupancy.
 
         # Resolve the service and its price. Must be an active service with
         # a real service_prices row for the requested vehicle_type - a
@@ -1282,7 +1360,6 @@ def api_submit_booking():
             )
             owner_row = cursor.fetchone()
             user_id = owner_row['user_id'] if owner_row else None
-        weather = get_weather_reading()
         vehicle_model = canonical_vehicle_model(cursor, typed_vehicle_model)
 
         # Operational context at the moment of booking, captured for
@@ -1348,7 +1425,6 @@ def api_submit_booking():
             return jsonify({'status': 'error', 'message': f'Could not save booking: {e}'}), 400
 
         booking_id = cursor.lastrowid
-        conn.commit()
         try:
             estimate = ServiceEstimates(cursor, ai_predictor, weather['rain_mm']).for_job(booking_id)
         except Exception:
@@ -1356,6 +1432,23 @@ def api_submit_booking():
             # an apparent rejection (which could cause a duplicate retry).
             current_app.logger.exception('Live timing unavailable for saved booking %s', booking_id)
             estimate = None
+        response = {
+            'status': 'success',
+            'message': 'Booking saved successfully and added to the queue.',
+            'booking_id': f"MD57-{booking_id}",
+            'booking_source': booking_source,
+            'queue_number': next_queue_number,
+            'plate_number': plate_number,
+            'vehicle_model': vehicle_model,
+            'assigned_bay': assigned_bay,
+            'price': booking_price,
+            'predicted_wait_minutes': predicted_wait_minutes,
+            'estimate': estimate,
+        }
+        if request_key:
+            cursor.execute('INSERT INTO booking_requests(actor_id,request_key,fingerprint,response_json,created_at) VALUES (?,?,?,?,?)',
+                           (session['user_id'],request_key,fingerprint,json.dumps(response),created_at))
+        conn.commit()
         conn.close()
 
         log_activity(session.get('user', 'Guest/Customer'), f'Created booking for plate: {plate_number} Source: {booking_source}')
@@ -1376,19 +1469,7 @@ def api_submit_booking():
         for role in ('staff', 'admin'):
             notify_role(role, 'New Booking', new_booking_message, 'new_booking', booking_id, exclude_user_id=actor_id)
 
-        return jsonify({
-            'status': 'success',
-            'message': 'Booking saved successfully and added to the queue.',
-            'booking_id': f"MD57-{booking_id}",
-            'booking_source': booking_source,
-            'queue_number': next_queue_number,
-            'plate_number': plate_number,
-            'vehicle_model': vehicle_model,
-            'assigned_bay': assigned_bay,
-            'price': booking_price,
-            'predicted_wait_minutes': predicted_wait_minutes,
-            'estimate': estimate,
-        }), 200
+        return jsonify(response), 200
 
     except Exception:
         # Every specific failure path above explicitly rolls back and

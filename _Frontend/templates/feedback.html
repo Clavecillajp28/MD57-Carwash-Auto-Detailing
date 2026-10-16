@@ -443,7 +443,7 @@
             let dateStr = item.created_at || 'Recent';
 
             tbody.innerHTML += `
-                <tr style="cursor: pointer;" onclick="handleRowClick('${escapeJsString(custName)}', '${escapeJsString(plate)}', '${escapeJsString(service)}', '${escapeJsString(item.rating)}', '${escapeJsString(comment)}', '${escapeJsString(dateStr)}')">
+                <tr style="cursor: pointer;" role="button" tabindex="0" ${actionAttributes('handleRowClick', [custName, plate, service, item.rating, comment, dateStr])}>
                     <td><strong>${escapeHtml(custName)}</strong><br><small style="color:var(--text-muted);">Plate: ${escapeHtml(plate)}</small></td>
                     <td><span class="badge-feedback">${escapeHtml(service)}</span></td>
                     <td><span class="rating-stars">${stars}</span></td>
@@ -455,5 +455,6 @@
         prevBtn.disabled = feedbackCurrentPage <= 1;
         nextBtn.disabled = feedbackCurrentPage >= totalPages;
     }
+registerActions({handleRowClick});
 </script>
 {% endblock %}

@@ -24,6 +24,7 @@ def api_submit_feedback():
         return jsonify({'status': 'error', 'message': 'Rating must be between 1 and 5.'}), 400
 
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
 
     # Customer/plate/service are read from the reservation itself, not
@@ -95,7 +96,7 @@ def api_get_feedbacks():
         f.service_type,f.rating,f.comment,f.created_at FROM feedbacks f
         LEFT JOIN reservations r ON r.reservation_id=f.reservation_id
         LEFT JOIN reservations_archive a ON a.reservation_id=f.reservation_id
-        WHERE COALESCE(r.is_synthetic,a.is_synthetic,0)=0 ORDER BY f.feedback_id DESC''')
+        WHERE f.is_synthetic=0 AND COALESCE(r.is_synthetic,a.is_synthetic,0)=0 ORDER BY f.feedback_id DESC''')
     rows = [dict(row) for row in cursor.fetchall()]
     if not is_staff_or_admin:
         for row in rows:

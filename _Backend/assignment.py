@@ -14,7 +14,7 @@ fewer jobs overall, so a new hire with no record yet still gets turns.
   available one.
 Nobody assigns staff by hand.
 """
-from datetime import datetime
+from shop_clock import datetime
 
 from analytics import mcda_criteria
 from database import get_db_connection

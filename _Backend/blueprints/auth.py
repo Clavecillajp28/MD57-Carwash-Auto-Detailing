@@ -1,7 +1,8 @@
 import secrets
 import sqlite3
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -155,6 +156,8 @@ def accept_invitation(token):
 
 @auth_bp.route('/auth/google')
 def google_login():
+    if not current_app.config.get('GOOGLE_ENABLED'):
+        return jsonify(status='error', message='Google sign-in is unavailable.'), 503
     next_url = request.args.get('next')
     if _is_local_path(next_url):
         session['oauth_next'] = next_url
@@ -170,6 +173,8 @@ def google_login():
 
 @auth_bp.route('/auth/google/callback')
 def google_auth_callback():
+    if not current_app.config.get('GOOGLE_ENABLED'):
+        return jsonify(status='error', message='Google sign-in is unavailable.'), 503
     try:
         token = oauth.google.authorize_access_token()
         user_info = token.get('userinfo')
@@ -396,7 +401,26 @@ def reset_password_page():
 
     generic_invalid = 'Invalid or expired code. Please check the code or request a new one.'
 
+    if password_error(new_password):
+        return render_template('reset_password.html', username=username, error=password_error(new_password))
+    if new_password != confirm_password:
+        return render_template('reset_password.html', username=username, error='Passwords do not match.')
+    # Hash before acquiring the write lock; recheck and consume the code under
+    # that lock so two simultaneous submissions cannot both reset the account.
+    # A cheap preflight avoids running a password KDF for arbitrary invalid
+    # usernames/codes. It grants no authority: the locked checks below repeat it.
+    preflight = get_db_connection()
+    try:
+        candidate = preflight.execute('''SELECT p.token FROM password_resets p JOIN users u ON u.user_id=p.user_id
+            WHERE LOWER(u.username)=LOWER(?) AND p.used=0 AND p.expires_at>?
+              AND p.attempts<? ORDER BY p.reset_id DESC LIMIT 1''',
+            (username,datetime.now().strftime('%Y-%m-%d %H:%M:%S'),MAX_OTP_ATTEMPTS)).fetchone()
+    finally:
+        preflight.close()
+    new_hash = generate_password_hash(new_password) if candidate and candidate['token']==otp_code else None
+
     conn = get_db_connection()
+    conn.execute('BEGIN IMMEDIATE')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', (username,))
     user = cursor.fetchone()
@@ -436,14 +460,10 @@ def reset_password_page():
         conn.close()
         return render_template('reset_password.html', username=username, error=generic_invalid)
 
-    if password_error(new_password):
+    if new_hash is None:
         conn.close()
-        return render_template('reset_password.html', username=username, error=password_error(new_password))
-    if new_password != confirm_password:
-        conn.close()
-        return render_template('reset_password.html', username=username, error='Passwords do not match.')
-
-    new_hash = generate_password_hash(new_password)
+        return render_template('reset_password.html', username=username, error=generic_invalid)
+    # The database's credential-change trigger advances session_version.
     cursor.execute("UPDATE users SET password_hash = ? WHERE user_id = ?", (new_hash, user['user_id']))
     # Invalidates every outstanding code for this account, not just the one
     # just used - an older, still-unused code shouldn't remain valid after

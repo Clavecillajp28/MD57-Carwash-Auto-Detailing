@@ -725,7 +725,7 @@
         container.innerHTML = unavailabilityData.map(u => `
             <div class="unavail-chip">
                 <span>${escapeHtml(formatBookingWhen(u.unavailable_date))}${u.reason ? ' - ' + escapeHtml(u.reason) : ''}</span>
-                <button type="button" onclick="removeUnavailability('${escapeJsString(u.unavailable_date)}')" title="Remove this day - you're available again"><i class="fa-solid fa-xmark"></i> Remove</button>
+                <button type="button" ${actionAttributes('removeUnavailability', [u.unavailable_date])} title="Remove this day - you're available again"><i class="fa-solid fa-xmark"></i> Remove</button>
             </div>
         `).join('');
     }
@@ -878,7 +878,7 @@
                     ${byDate[date].map(shift => `
                         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 10px;">
                             <span style="font-size: var(--text-xs); color: var(--text-main); min-width: 0; word-break: break-word;"><i class="fa-solid fa-user-gear"></i> ${escapeHtml(shift.staff_name)}${shift.shift_note ? ` <span style="color: var(--text-muted);">- ${escapeHtml(shift.shift_note)}</span>` : ''}</span>
-                            ${isAdmin ? `<button class="roster-remove-btn" title="Remove from roster" aria-label="Remove ${escapeHtml(shift.staff_name)} from ${escapeHtml(shift.shift_date)}" onclick="removeStaffShift(${Number(shift.staff_user_id)}, '${escapeJsString(shift.staff_name)}', '${escapeJsString(shift.shift_date)}')"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                            ${isAdmin ? `<button class="roster-remove-btn" title="Remove from roster" aria-label="Remove ${escapeHtml(shift.staff_name)} from ${escapeHtml(shift.shift_date)}" ${actionAttributes('removeStaffShift', [Number(shift.staff_user_id), shift.staff_name, shift.shift_date])}><i class="fa-solid fa-xmark"></i></button>` : ''}
                         </div>
                     `).join('')}
                 </div>
@@ -1289,5 +1289,6 @@
     function exportAttendanceCSV() {
         window.location.href = '/api/export-attendance-csv';
     }
+registerActions({removeUnavailability, removeStaffShift});
 </script>
 {% endblock %}

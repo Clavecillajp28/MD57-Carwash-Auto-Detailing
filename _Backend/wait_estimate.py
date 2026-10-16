@@ -8,7 +8,8 @@ A bay washes one car at a time. Ahead of a car joining now is:
   within the next 30 minutes - each at its standard minutes.
 Standard minutes = the service's set duration plus the vehicle size's extra.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from shop_clock import datetime
 
 from utils import parse_booking_datetime
 

@@ -1,14 +1,56 @@
 """Owner recovery controls and manager delivery/audit visibility."""
-from datetime import datetime
+from shop_clock import datetime, SHOP_ZONE
 import json
 import time
+import secrets
 
 from flask import Blueprint, current_app, jsonify, render_template, request, send_file, session
 from database import get_db_connection
 from utils import role_required, owner_only, is_owner, log_activity
 import backups
+from extensions import csrf
 
 operations_bp=Blueprint('operations',__name__)
+
+
+@operations_bp.route('/api/mail/brevo-events', methods=['POST'])
+@csrf.exempt
+def brevo_event():
+    """Provider callbacks use a dedicated bearer secret, never a session cookie."""
+    expected=current_app.config.get('BREVO_WEBHOOK_TOKEN', '')
+    supplied=request.headers.get('Authorization', '')
+    if not expected or not secrets.compare_digest(supplied.encode(), ('Bearer '+expected).encode()):
+        return jsonify(status='error', message='Unauthorized webhook.'), 401
+    data=request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(status='error', message='A JSON object is required.'), 400
+    event=data.get('event')
+    state={'delivered':'delivered','hard_bounce':'bounced','hardBounce':'bounced',
+           'blocked':'bounced','invalid':'bounced','invalid_email':'bounced',
+           'error':'bounced','spam':'bounced'}.get(event)
+    provider_id=data.get('message-id')
+    if not state:
+        return jsonify(status='ignored'), 200
+    try:
+        timestamp=float(data.get('ts_event', data.get('ts', 0)))
+        if not 0 < timestamp <= time.time()+300:
+            raise ValueError()
+    except (TypeError, ValueError, OverflowError):
+        return jsonify(status='error', message='Invalid event timestamp.'), 400
+    if not isinstance(provider_id,str) or len(provider_id)>512:
+        return jsonify(status='error',message='Invalid message ID.'),400
+    conn=get_db_connection()
+    try:
+        if not isinstance(data.get('email'),str) or len(data['email'])>254:
+            return jsonify(status='error',message='Invalid recipient.'),400
+        conn.execute('INSERT OR IGNORE INTO mail_delivery_events(provider_message_id,recipient,event_timestamp,state) VALUES (?,?,?,?)',
+                     (provider_id,data['email'],timestamp,state))
+        from mail_outbox import reconcile_events
+        reconcile_events(conn,provider_id,data['email'])
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify(status='success'),200
 
 
 @operations_bp.route('/api/operations/employees/import', methods=['POST'])
@@ -22,7 +64,7 @@ def employee_import():
     if not upload:
         return jsonify(status='error', message='Choose your encrypted employee transfer file.'), 400
     try:
-        result = import_employees(upload.read(MAX_BYTES + 1), current_app.secret_key)
+        result = import_employees(upload.read(MAX_BYTES + 1), current_app.config.get('MD57_EMPLOYEE_TRANSFER_KEY') or current_app.secret_key)
     except ValueError as error:
         return jsonify(status='error', message=str(error)), 400
     log_activity(session['user'], f'Imported employee logins: {result["added"]} added, {result["skipped"]} already present')
@@ -85,11 +127,11 @@ def backup_action(name,action):
 @role_required('admin')
 def delivery_list():
     status=request.args.get('status','')
-    if status and status not in ('pending','sending','sent','failed','uncertain','expired'):
+    if status and status not in ('pending','sending','accepted','delivered','bounced','sent','failed','uncertain','expired'):
         return jsonify(status='error',message='Unknown delivery status.'),400
     conn=get_db_connection()
     try:
-        rows=conn.execute('''SELECT mail_id,recipient,subject,status,attempts,created_at,sent_at,last_error,
+        rows=conn.execute('''SELECT mail_id,recipient,subject,status,attempts,created_at,sent_at,provider_message_id,delivered_at,last_error,
             retryable,expires_at FROM mail_outbox WHERE (?='' OR status=?) AND (?=1 OR retryable=1)
             ORDER BY mail_id DESC LIMIT 100''',(status,status,int(is_owner()))).fetchall()
     finally: conn.close()

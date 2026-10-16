@@ -1,6 +1,6 @@
 """Random Forest turnaround prediction and MCDA staff scoring."""
 
-from datetime import datetime
+from shop_clock import datetime
 
 import numpy as np
 import pandas as pd

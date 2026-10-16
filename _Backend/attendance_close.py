@@ -11,7 +11,7 @@ left open (the server was off at closing):
 staff_attendance is insert-only, so a time-out is a new row (see
 utils.get_latest_attendance_by_staff).
 """
-from datetime import datetime
+from shop_clock import datetime
 
 from database import get_db_connection
 from live_updates import publish

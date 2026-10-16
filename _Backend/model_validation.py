@@ -1,5 +1,5 @@
 """Chronological real-only holdout: finish training jobs before test arrivals."""
-from datetime import datetime
+from shop_clock import datetime
 import hashlib
 import json
 import math

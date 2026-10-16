@@ -1,5 +1,5 @@
 """Consistent SQLite snapshots, bounded retention and non-destructive restore drills."""
-from datetime import datetime
+from shop_clock import datetime
 import hashlib
 import json
 import os
@@ -8,11 +8,11 @@ import sqlite3
 import tempfile
 
 import database
-from config import BASE_DIR
+from config import BASE_DIR, DATA_DIR
 
 
 def folder():
-    path = Path(os.environ.get('MD57_BACKUP_DIR', str(Path(BASE_DIR)/'backups'/'automated'))).resolve()
+    path = Path(os.environ.get('MD57_BACKUP_DIR', str(Path(DATA_DIR)/'backups'/'automated'))).resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

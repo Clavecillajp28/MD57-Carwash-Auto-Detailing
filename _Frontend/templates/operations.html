@@ -39,8 +39,8 @@
         </div>
         {% endif %}
         <section class="profile-card">
-            <div class="profile-section-heading"><i class="fa-solid fa-envelope" aria-hidden="true"></i><div><h2>Email delivery</h2><p class="profile-muted">Track queued messages and retry eligible deliveries.</p></div></div>
-            <div class="ops-toolbar"><div><label for="deliveryStatus">Delivery status</label><select id="deliveryStatus"><option value="">All statuses</option>{% for status in ['pending','sending','sent','failed','uncertain','expired'] %}<option value="{{ status }}">{{ status|title }}</option>{% endfor %}</select></div><button class="btn-secondary" id="deliveryRefresh"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Refresh</button></div>
+            <div class="profile-section-heading"><i class="fa-solid fa-envelope" aria-hidden="true"></i><div><h2>Email delivery</h2><p class="profile-muted">Accepted means submitted to the provider; Delivered requires provider confirmation. Retry eligible failed messages here.</p></div></div>
+            <div class="ops-toolbar"><div><label for="deliveryStatus">Delivery status</label><select id="deliveryStatus"><option value="">All statuses</option>{% for status in ['pending','sending','accepted','delivered','bounced','failed','uncertain','expired'] %}<option value="{{ status }}">{{ status|title }}</option>{% endfor %}</select></div><button class="btn-secondary" id="deliveryRefresh"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Refresh</button></div>
             <div id="deliveryList" class="ops-records"></div>
         </section>
         <section class="profile-card">
