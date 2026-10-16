@@ -3,6 +3,10 @@
 {% block title %}MD57 Car Wash & Auto Detailing - Service History & Customer Database{% endblock %}
 
 {% block extra_style %}
+        .history-source { border:1px solid var(--border); background:var(--surface-raised); border-radius:var(--radius-md); padding:12px 16px; margin:0 0 16px; color:var(--text-muted); font-size:var(--text-sm); }
+        .history-source summary { cursor:pointer; line-height:1.6; }
+        .history-source summary span { margin-left:8px; font-size:var(--text-xs); }
+        .history-source p { margin:10px 0 0; line-height:1.65; }
         .list-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
         .list-filters .search-box { flex: 1 1 240px; margin: 0 !important; }
         .list-filters label { display: block; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
@@ -141,16 +145,16 @@
 
 {% block content %}
             <h2 class="page-title"><i class="fa-solid fa-clock-rotate-left"></i> Service History & Customer Database</h2>
-            {% if demo_history %}<p role="note">Entries with DEMO plates are simulated presentation history. Use Analytics source filters to view real records separately.</p>{% endif %}
+            {% if demo_history and role != 'staff' %}<details class="history-source"><summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i> About these records <span>Includes simulated history</span></summary><p>DEMO plates identify generated presentation records. <a href="/analytics?days=90&amp;source=real">View real records in Analytics</a> to keep operational measurements separate.</p></details>{% endif %}
             {% if role == 'staff' %}
-            <p class="page-subtitle">Showing your own service history only - jobs you personally handled. Every job that's finished - completed or cancelled - lands here automatically, chronologically sorted.</p>
+            <p class="page-subtitle">Your completed and cancelled services, with the most recent activity first.</p>
             {% else %}
-            <p class="page-subtitle">Every booking that's finished - completed or cancelled - lands here automatically, chronologically sorted. Cancelled bookings can still be restored from the Cancelled page (admin only).</p>
+            <p class="page-subtitle">Review completed and cancelled services. Search by customer, plate, service or employee.</p>
             {% endif %}
 
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-                    <h3 style="margin: 0; font-size: var(--text-md); color: var(--accent-amber);">Completed & Cancelled Transactions Archive</h3>
+                    <h3 style="margin: 0; font-size: var(--text-md); color: var(--accent-amber);">Service records</h3>
                     <button class="btn-primary" onclick="exportHistoryCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
                 </div>
 
@@ -170,8 +174,8 @@
                 <div class="pagination-container" id="paginationContainer" style="display: none;">
                     <div class="pagination-info" id="paginationInfo">Showing 1-5 of 0</div>
                     <div class="pagination-buttons">
-                        <button class="btn-page" id="prevBtn" onclick="changePage(-1)">&#10094;</button>
-                        <button class="btn-page" id="nextBtn" onclick="changePage(1)">&#10095;</button>
+                        <button class="btn-page" id="prevBtn" aria-label="Previous page" onclick="changePage(-1)">&#10094;</button>
+                        <button class="btn-page" id="nextBtn" aria-label="Next page" onclick="changePage(1)">&#10095;</button>
                     </div>
                 </div>
             </div>

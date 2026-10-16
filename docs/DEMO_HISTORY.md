@@ -14,7 +14,7 @@ plates; no email addresses, notifications or usable staff passwords are created.
 Existing accounts and records stay unchanged.
 
 Log in with your existing Owner account. Open History or Manager Analytics,
-select the last 90 days and choose All records or Synthetic records. Real records
+select the last 90 days and choose All records or Simulated records. Real records
 intentionally excludes this batch. History identifies DEMO plates, and analytics
 and reports retain their data-source disclosure; no notice appears site-wide.
 No historical model predictions are invented. These rows cannot establish real

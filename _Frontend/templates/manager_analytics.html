@@ -41,6 +41,11 @@
         .range-error { color: var(--danger); font-size: var(--text-xs); margin: 0 0 8px; min-height: 1em; }
         .period-note { margin: -8px 0 18px; font-size: var(--text-xs); color: var(--text-muted); display: flex; gap: 6px; align-items: baseline; }
         .period-note:empty { display: none; }
+        .an-note { flex-basis:100%; color:var(--text-muted); font-size:var(--text-xs); line-height:1.6; margin:0; }
+        .an-source { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 18px; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-raised); }
+        .an-source label { font-size:var(--text-xs); font-weight:600; color:var(--text-muted); }
+        .an-source select { min-height:40px; max-width:100%; font:inherit; }
+        .an-source p { flex:1 1 260px; margin:0; color:var(--text-muted); font-size:var(--text-xs); line-height:1.6; }
 
         /* ---- KPI row ---- */
         .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 26px; }
@@ -228,6 +233,15 @@
     </div>
 </div>
 <p class="period-note" id="periodNote"></p>
+<div class="an-source">
+    <label for="recordSource">Record source</label>
+    <select id="recordSource" aria-describedby="sourceNote">
+        <option value="all">All records</option>
+        <option value="real">Real records</option>
+        <option value="synthetic">Simulated records</option>
+    </select>
+    <p id="sourceNote" role="status" aria-live="polite">Loading record details…</p>
+</div>
 
 <div class="kpis" id="kpis" data-skeleton="cards:6"></div>
 
@@ -261,6 +275,8 @@
     let charts = [];
     let loadSeq = 0;
     const initialQuery = new URLSearchParams(location.search);
+    let recordSource = ['all', 'real', 'synthetic'].includes(initialQuery.get('source')) ? initialQuery.get('source') : 'all';
+    document.getElementById('recordSource').value = recordSource;
     if (/^\d{4}-\d{2}-\d{2}$/.test(initialQuery.get('start') || '') && /^\d{4}-\d{2}-\d{2}$/.test(initialQuery.get('end') || '')) {
         period = { start: initialQuery.get('start'), end: initialQuery.get('end') };
     } else if ([7, 30, 90].includes(Number(initialQuery.get('days')))) {
@@ -271,7 +287,7 @@
 
     function periodQuery(p = period) {
         const dates = p.start ? `start=${p.start}&end=${p.end}` : `days=${p.days}`;
-        return dates;
+        return `${dates}&source=${encodeURIComponent(recordSource)}`;
     }
     function exportUrl(section, block) {
         return `/api/analytics/export?section=${section}${block ? '&block=' + block : ''}&${periodQuery()}`;
@@ -288,6 +304,8 @@
     // ---------------------------------------------------------------- loading
     async function load({ quiet = false } = {}) {
         const seq = ++loadSeq;
+        document.getElementById('sections').setAttribute('aria-busy', 'true');
+        document.getElementById('sourceNote').textContent = 'Updating report…';
         if (!quiet) {
             document.getElementById('kpis').innerHTML = skeletonHtml('cards:6');
             document.querySelectorAll('[data-blocks]').forEach(el => { el.innerHTML = skeletonHtml('cards:2'); });
@@ -302,19 +320,24 @@
             render(quiet);
         } catch (e) {
             if (seq !== loadSeq) return;
+            document.getElementById('sourceNote').textContent = 'Report unavailable. Change the filters or refresh to retry.';
             const message = `<p class="skeleton-failed">${escapeHtml(e.message || "Couldn't load analytics.")} Refresh the page to try again.</p>`;
             document.getElementById('kpis').innerHTML = message;
             document.querySelectorAll('[data-blocks]').forEach(el => { el.innerHTML = ''; });
+        } finally {
+            if (seq === loadSeq) document.getElementById('sections').setAttribute('aria-busy', 'false');
         }
     }
 
     // ---------------------------------------------------------------- rendering
     function render(quiet = false) {
         const p = report.period;
+        document.getElementById('sourceNote').textContent = report.source.note;
         let lifecycle=document.getElementById('lifecycleSummary');
         if(!lifecycle){lifecycle=document.createElement('p');lifecycle.id='lifecycleSummary';lifecycle.className='an-note';document.querySelector('.an-actions').after(lifecycle);}
         const timings=report.operations.lifecycle;
-        lifecycle.textContent=`Queue wait: ${timings.queue_wait??'not recorded'} min · Service duration: ${timings.service??'not recorded'} min · Pickup delay: ${timings.pickup_delay??'not recorded'} min (${timings.pickup_samples} collections). ${timings.definition}`;
+        lifecycle.textContent=`Queue wait: ${timings.queue_wait??'not recorded'} min · Service: ${timings.service??'not recorded'} min · Pickup: ${timings.pickup_delay??'not recorded'} min (${timings.pickup_samples} collections)`;
+        lifecycle.title=timings.definition;
         document.getElementById('periodLabel').textContent = `Business performance · ${p.label}`;
         const notes = [];
         if (p.tracked_days === 0) notes.push('No records in this period.');
@@ -680,6 +703,10 @@
     document.querySelectorAll('.an-tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
     const rangePop = document.getElementById('rangePop');
+    document.getElementById('recordSource').addEventListener('change', event => {
+        recordSource = event.target.value;
+        load();
+    });
     const customBtn = document.querySelector('.seg button[data-days="custom"]');
     function markPeriodButton() {
         document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', period.start ? b === customBtn : b.dataset.days === String(period.days)));

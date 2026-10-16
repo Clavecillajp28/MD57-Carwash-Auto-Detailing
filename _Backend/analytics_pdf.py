@@ -420,7 +420,7 @@ def _letterhead(report, title):
                                ('LINEBELOW', (0, 0), (-1, 0), 1.5, GOLD), ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
                                ('LEFTPADDING', (0, 0), (0, 0), 0)]))
     source = report.get('source', {'label': 'All records', 'note': ''})
-    caption = source['label'] if source.get('key') == 'all' else source['label'] + '. ' + source['note']
+    caption = source['label'] + ('. ' + source['note'] if source.get('note') else '')
     return [table, Spacer(1, 6), _p(caption, 'method'), Spacer(1, 12)]
 
 

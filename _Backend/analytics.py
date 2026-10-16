@@ -368,7 +368,7 @@ def build(start, end, now=None, source='all'):
     conn.close()
 
     report = {
-        'source': {'key': source, 'label': 'System records' if source == 'all' else SOURCES[source],
+        'source': {'key': source, 'label': SOURCES[source],
                    'note': 'Includes synthetic history; these figures do not establish real-world prediction accuracy.' if source != 'real'
                            else 'Real records only. Synthetic history is excluded from operational recommendations.'},
         'period': {
