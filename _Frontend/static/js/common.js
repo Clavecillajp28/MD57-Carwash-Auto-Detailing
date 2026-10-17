@@ -363,7 +363,11 @@ function takeFocusBookingId() {
 }
 
 function markAllNotificationsRead() {
-    fetch('/api/notifications/mark-all-read', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+    })
         .then(() => refreshNotifications())
         .catch(() => {});
 }
