@@ -65,6 +65,47 @@ class AuditRepairsTests(unittest.TestCase):
             session.clear();session.update(user=user['username'],user_id=identity,role=user['role'],
                 is_owner=bool(user['is_owner']),session_version=user['session_version'])
 
+    def test_reset_request_email_recipient_cooldown_and_password_change(self):
+        from werkzeug.security import check_password_hash
+        conn=database.get_db_connection()
+        conn.execute("UPDATE users SET notify_email='recovery@example.test' WHERE user_id=?",(self.customer,))
+        conn.commit();conn.close()
+        with patch('blueprints.auth.send_branded_email') as send:
+            response=self.client.post('/forgot-password',data={'username':'race-customer'})
+            self.assertEqual(response.status_code,200)
+            packet=send.call_args.kwargs
+            self.assertEqual(packet['recipient'],'recovery@example.test')
+            self.assertEqual(len(packet['highlight']),6)
+            self.assertTrue(packet['highlight'].isdigit())
+            self.assertIn('10 minutes',packet['plain_text_body'])
+            self.client.post('/forgot-password',data={'username':'race-customer'})
+            send.assert_called_once()
+        response=self.client.post('/reset-password',data=dict(username='race-customer',otp=packet['highlight'],
+            password='ResetGood!5706',confirm_password='ResetGood!5706'))
+        self.assertEqual(response.status_code,302)
+        conn=database.get_db_connection()
+        self.assertTrue(check_password_hash(conn.execute('SELECT password_hash FROM users WHERE user_id=?',(self.customer,)).fetchone()[0],'ResetGood!5706'))
+        conn.close()
+
+    def test_reset_expiry_attempt_limit_and_delivery_failure(self):
+        with patch('blueprints.auth.send_branded_email',side_effect=RuntimeError('test delivery failed')),patch('blueprints.auth.log_activity') as audit:
+            response=self.client.post('/forgot-password',data={'username':'race-customer'})
+            self.assertEqual(response.status_code,200)
+            audit.assert_called_with('race-customer','Password reset requested - email delivery failed')
+        conn=database.get_db_connection()
+        row=conn.execute('SELECT * FROM password_resets WHERE user_id=?',(self.customer,)).fetchone()
+        token=row['token'];reset_id=row['reset_id']
+        conn.execute('UPDATE password_resets SET expires_at=? WHERE reset_id=?',
+            ((datetime.now()-timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S'),reset_id))
+        conn.commit();conn.close()
+        packet=dict(username='race-customer',otp=token,password='ResetGood!5706',confirm_password='ResetGood!5706')
+        self.assertIn(b'Invalid or expired code',self.client.post('/reset-password',data=packet).data)
+        conn=database.get_db_connection()
+        conn.execute('UPDATE password_resets SET expires_at=?,attempts=5 WHERE reset_id=?',
+            ((datetime.now()+timedelta(minutes=10)).strftime('%Y-%m-%d %H:%M:%S'),reset_id))
+        conn.commit();conn.close()
+        self.assertIn(b'Too many incorrect attempts',self.client.post('/reset-password',data=packet).data)
+
     def test_reset_is_single_use_under_concurrency_and_revokes_sessions(self):
         import blueprints.auth as auth
         conn=database.get_db_connection()

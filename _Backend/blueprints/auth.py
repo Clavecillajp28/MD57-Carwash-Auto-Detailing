@@ -59,8 +59,10 @@ def _send_password_reset_email(email, fullname, otp_code):
                 f"- MD57 Team"
             ),
         )
+        return True
     except Exception as e:
         print(f"[WARNING] Failed to send password reset email to {email}: {e}")
+        return False
 
 
 def _send_verification_email(email, fullname, code):
@@ -378,8 +380,9 @@ def forgot_password_page():
                         log_activity(username, 'Password reset requested - failed to generate a free OTP code after retries')
                     else:
                         conn.commit()
-                        _send_password_reset_email(user['notify_email'] or user['username'], user['fullname'], otp_code)
-                        log_activity(username, 'Password reset requested - OTP emailed')
+                        accepted = _send_password_reset_email(user['notify_email'] or user['username'], user['fullname'], otp_code)
+                        log_activity(username, 'Password reset requested - OTP accepted for delivery' if accepted
+                                     else 'Password reset requested - email delivery failed')
 
             conn.close()
 

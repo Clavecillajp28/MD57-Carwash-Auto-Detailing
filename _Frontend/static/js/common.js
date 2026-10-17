@@ -478,7 +478,7 @@ function loadKpiStrip(prefix = 'home') {
 // way the old hardcoded "3 services"/"4 vehicle types" copies eventually did.
 function formatPeso(amount) {
     if (amount === null || amount === undefined || amount === '') return 'N/A';
-    return 'â‚±' + Number(amount).toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    return '\u20b1' + Number(amount).toLocaleString('en-PH', { maximumFractionDigits: 0 });
 }
 
 async function fetchServiceCatalog() {
