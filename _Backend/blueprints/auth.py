@@ -15,6 +15,10 @@ from utils import log_activity, get_redirect_for_role, send_branded_email, now_s
 
 auth_bp = Blueprint('auth', __name__)
 
+# Temporarily disabled for presentation access. Set this back to True to
+# restore the password-login lockout; attempt logging remains enabled.
+PASSWORD_LOGIN_LOCKOUT_ENABLED = False
+
 # How long a password-reset OTP stays valid, and how soon another one can
 # be issued for the same account - the cooldown stops a refreshed/resubmitted
 # form (or someone spamming the form) from mail-bombing one inbox with a
@@ -255,7 +259,10 @@ def login_page():
         username = username.strip()
         ip_address = request.remote_addr
 
-        locked, retry_minutes = is_locked_out(username, ip_address)
+        locked, retry_minutes = (
+            is_locked_out(username, ip_address)
+            if PASSWORD_LOGIN_LOCKOUT_ENABLED else (False, None)
+        )
         if locked:
             log_activity(username, 'Login blocked: too many failed attempts')
             return render_template(
