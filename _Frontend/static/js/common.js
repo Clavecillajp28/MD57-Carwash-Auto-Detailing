@@ -8,6 +8,7 @@
     // scripts never have to remember to do it themselves.
     const originalFetch = window.fetch;
     const bookingKeys = new Map();
+    let csrfRefresh = null;
     window.fetch = function(url, options) {
         options = options || {};
         const method = (options.method || 'GET').toUpperCase();
@@ -40,6 +41,32 @@
             options.headers.set('Idempotency-Key', key);
         }
         return originalFetch(url, options).then(async response=>{
+            // A stale page or another tab can leave the signed token out of
+            // sync with the session cookie. Retry only an explicit CSRF
+            // rejection (the handler has not run), never an arbitrary error.
+            if (sameOrigin && response.status === 400 && !(url instanceof Request)
+                    && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+                const error = await response.clone().json().catch(() => null);
+                if (error?.code === 'csrf_failed') {
+                    if (!csrfRefresh) {
+                        csrfRefresh = originalFetch('/api/csrf-token', {
+                            credentials: 'same-origin', cache: 'no-store',
+                        }).then(async result => {
+                            if (!result.ok) throw new Error('Session expired');
+                            const data = await result.json();
+                            if (!data.csrf_token) throw new Error('Missing security token');
+                            document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', data.csrf_token);
+                            return data.csrf_token;
+                        }).finally(() => { csrfRefresh = null; });
+                    }
+                    const freshToken = await csrfRefresh.catch(() => null);
+                    if (freshToken) {
+                        const headers = new Headers(options.headers || {});
+                        headers.set('X-CSRFToken', freshToken);
+                        response = await originalFetch(url, {...options, headers});
+                    }
+                }
+            }
             if (booking && response.status < 500) {
                 bookingKeys.delete(bookingBody);
                 try { sessionStorage.removeItem('md57_pending_booking'); } catch (_) {}

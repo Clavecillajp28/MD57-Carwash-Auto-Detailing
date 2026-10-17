@@ -11,7 +11,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
-from flask_wtf.csrf import CSRFError
+from flask_wtf.csrf import CSRFError, generate_csrf
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -140,6 +140,7 @@ def handle_csrf_error(e):
     if _wants_json():
         return jsonify({
             "status": "error",
+            "code": "csrf_failed",
             "message": f"CSRF token validation failed: {e.description}",
         }), 400
 
@@ -147,6 +148,15 @@ def handle_csrf_error(e):
         "login.html",
         error="Security validation failed or session expired. Please log in again.",
     ), 400
+
+
+@app.get('/api/csrf-token')
+def refresh_csrf_token():
+    # Same-origin clients may recover an expired token without bypassing
+    # CSRF validation or creating an authenticated session.
+    if not session.get('user') or session.get('mfa_pending'):
+        return jsonify(status='error', message='Please sign in again.'), 401
+    return jsonify(status='success', csrf_token=generate_csrf())
 
 
 @app.errorhandler(404)

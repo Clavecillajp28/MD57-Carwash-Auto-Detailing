@@ -189,6 +189,24 @@ class AuditRepairsTests(unittest.TestCase):
         finally:
             self.app.config['WTF_CSRF_ENABLED']=False
 
+    def test_staff_can_refresh_missing_csrf_then_request_clock_in(self):
+        self.sign_in(self.client,self.staff)
+        self.app.config['WTF_CSRF_ENABLED']=True
+        try:
+            response=self.client.post('/api/staff-clock-in-request',json={},headers={'X-CSRFToken':'stale'})
+            self.assertEqual(response.status_code,400)
+            self.assertEqual(response.get_json()['code'],'csrf_failed')
+            fresh=self.client.get('/api/csrf-token')
+            self.assertEqual(fresh.status_code,200)
+            self.assertIn('no-store',fresh.headers['Cache-Control'])
+            with patch('blueprints.staff_api.is_clock_in_open',return_value=True):
+                response=self.client.post('/api/staff-clock-in-request',json={},
+                    headers={'X-CSRFToken':fresh.get_json()['csrf_token']})
+            self.assertEqual(response.status_code,200,response.get_json())
+            self.assertEqual(self.app.test_client().get('/api/csrf-token').status_code,401)
+        finally:
+            self.app.config['WTF_CSRF_ENABLED']=False
+
     def test_mail_acceptance_webhook_replay_and_authentication(self):
         from mail_outbox import send
         with self.app.app_context():
