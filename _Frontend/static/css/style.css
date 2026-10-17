@@ -492,7 +492,8 @@ footer {
     header { padding: 10px 14px; gap: 10px; }
     .header-brand-text { display: none; }
     .sidebar-toggle-btn { display: flex; }
-    .btn-primary, .btn-secondary { flex: 1 1 auto; }
+    /* Button sizing belongs to its action row. Growing every button here
+       stretches standalone actions vertically inside column layouts. */
     #floating-toast { bottom: 16px; right: 16px; left: 16px; max-width: none; }
 
     /* Off-canvas drawer instead of staying pinned to the left - a fixed
