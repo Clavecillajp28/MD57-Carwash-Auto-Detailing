@@ -224,11 +224,12 @@ def api_get_queue():
                 item['hold_reason'] = slot_hold.hold_reason(candidate, holder, now)
         if not is_staff_or_admin:
             if not item['is_mine']:  # customers see their own booking in full
-                if item.get('email') and '@' in item['email']:
-                    parts = item['email'].split('@')
-                    item['email'] = f"{parts[0][:2]}***@{parts[1]}"
+                item['email'] = None
                 item['customer_name'] = 'Customer'
                 item['plate_number'] = mask_plate(item.get('plate_number'))
+                item['vehicle_model'] = None
+                item['washer_id'] = None
+                item['washer'] = None
         del item['user_id'], item['base_minutes']
         reservations.append(item)
     conn.close()
@@ -672,6 +673,10 @@ def api_cancel_booking():
     if user_role == 'customer' and not is_own_booking(target['user_id'], target['customer_email']):
         conn.close()
         return jsonify({'status': 'error', 'message': 'Unauthorized: You can only cancel your own bookings.'}), 403
+
+    if user_role == 'customer' and target['queue_status'] != 'waiting':
+        conn.close()
+        return jsonify(status='error', message='Service has already started. Please contact the shop for assistance.'), 409
 
     plate_number = target['vehicle_plate_number']
     cancel_reason = 'customer' if user_role == 'customer' else 'staff'
@@ -1157,6 +1162,9 @@ def api_submit_booking():
         booking_source = data.get('booking_source', 'Online Booking')
         booking_date = data.get('booking_date')
         booking_time = data.get('booking_time')
+
+        if session.get('role') == 'customer' and (not booking_date or not booking_time):
+            return jsonify(status='error', message='Please select a date and time. Only shop personnel can add walk-ins.'), 403
 
         if not customer_name:
             customer_name = session.get('fullname') or session.get('user')

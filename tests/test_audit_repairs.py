@@ -65,6 +65,75 @@ class AuditRepairsTests(unittest.TestCase):
             session.clear();session.update(user=user['username'],user_id=identity,role=user['role'],
                 is_owner=bool(user['is_owner']),session_version=user['session_version'])
 
+    def test_customer_cannot_call_employee_or_management_routes(self):
+        import ast
+        import re
+        permissions={}
+        for path in (Path(__file__).resolve().parents[1]/'_Backend/blueprints').glob('*.py'):
+            for function in ast.parse(path.read_text(encoding='utf-8')).body:
+                if not isinstance(function,ast.FunctionDef): continue
+                for decorator in function.decorator_list:
+                    if isinstance(decorator,ast.Call) and isinstance(decorator.func,ast.Name) and decorator.func.id=='role_required':
+                        permissions[function.name]={arg.value for arg in decorator.args}
+        self.sign_in(self.client,self.customer)
+        checked=0
+        for rule in self.app.url_map.iter_rules():
+            roles=permissions.get(self.app.view_functions[rule.endpoint].__name__)
+            if roles is None or 'customer' in roles: continue
+            path=re.sub(r'<[^>]+>','1',rule.rule)
+            for method in rule.methods-{'HEAD','OPTIONS'}:
+                response=self.client.open(path,method=method,**({'json':{}} if method!='GET' else {}))
+                self.assertEqual(response.status_code,403 if path.startswith('/api/') else 302,(path,method,response.status_code))
+                checked+=1
+        self.assertGreater(checked,70)
+        page=self.client.get('/queue').get_data(as_text=True)
+        for control in ['modalStartBtn','modalCompleteBtn','modalConfirmBtn','modalRejectBtn','modalArrivedBtn']:
+            self.assertNotIn(f'id="{control}"',page)
+
+    def test_customer_booking_boundaries_and_other_customer_privacy(self):
+        conn=database.get_db_connection()
+        def booking(owner,plate,state):
+            return conn.execute('''INSERT INTO reservations(user_id,customer_name,customer_email,vehicle_plate_number,vehicle_type,vehicle_model,service_id,assigned_bay,queue_status)
+                VALUES (?, 'Private Person','private@example.test',?,'Small','Private Model',?,'Bay #1',?)''',
+                (owner,plate,self.service,state)).lastrowid
+        own=booking(self.customer,'OWN-5701','waiting')
+        started=booking(self.customer,'OWN-5702','in_progress')
+        other=booking(self.owner['user_id'],'OTHER-5701','waiting')
+        completed=booking(self.owner['user_id'],'OTHER-5702','completed')
+        conn.commit();conn.close()
+        self.sign_in(self.client,self.customer)
+        self.assertEqual(self.client.post('/api/start-service',json={'reservation_id':own,'role':'admin'}).status_code,403)
+        self.assertEqual(self.client.post('/api/cancel-booking',json={'reservation_id':started}).status_code,409)
+        self.assertEqual(self.client.post('/api/cancel-booking',json={'reservation_id':other}).status_code,403)
+        tomorrow=(datetime.now()+timedelta(days=1)).strftime('%Y-%m-%d')
+        self.assertEqual(self.client.post('/api/reschedule-booking',json={'reservation_id':other,
+            'booking_date':tomorrow,'booking_time':'08:00 AM'}).status_code,403)
+        self.assertEqual(self.client.post('/api/submit-feedback',json={'reservation_id':completed,'rating':5}).status_code,403)
+        self.assertEqual(self.client.post('/api/submit-booking',json={'service_id':self.service,'plate_number':'HACK-57','booking_source':'Walk-in Customer'}).status_code,403)
+        with patch('blueprints.queue_api.get_weather_reading',return_value={'condition':'Clear','rain_mm':0}):
+            rows=self.client.get('/api/get-queue').get_json()['data']
+        stranger=next(row for row in rows if row['id']==other)
+        for field in ('email','vehicle_model','washer_id','washer'):self.assertIsNone(stranger[field])
+        self.assertEqual(stranger['customer_name'],'Customer')
+        mine=self.client.get('/api/my-bookings').get_json()['data']
+        self.assertEqual({row['id'] for row in mine},{own,started})
+        self.assertEqual(self.client.post('/api/cancel-booking',json={'reservation_id':own}).status_code,200)
+        with patch('blueprints.queue_api.is_date_staffed',return_value=True):
+            created=self.client.post('/api/submit-booking',json={'service_id':self.service,'plate_number':'SAFE-5701',
+                'vehicle_type':'Small','booking_date':tomorrow,'booking_time':'08:00 AM',
+                'user_id':self.owner['user_id'],'role':'admin','queue_status':'in_progress','price':1,
+                'booking_source':'Walk-in Customer','assigned_bay':'Bay #3'})
+        self.assertEqual(created.status_code,200,created.get_json())
+        conn=database.get_db_connection()
+        row=conn.execute("SELECT * FROM reservations WHERE vehicle_plate_number='SAFE-5701'").fetchone()
+        self.assertEqual(row['user_id'],self.customer)
+        self.assertEqual(row['queue_status'],'waiting')
+        self.assertEqual(row['booking_source'],'Online Booking')
+        self.assertEqual(row['assigned_bay'],'Bay #1')
+        self.assertNotEqual(row['price'],1)
+        self.assertIsNone(row['started_at'])
+        conn.close()
+
     def test_reset_request_email_recipient_cooldown_and_password_change(self):
         from werkzeug.security import check_password_hash
         conn=database.get_db_connection()

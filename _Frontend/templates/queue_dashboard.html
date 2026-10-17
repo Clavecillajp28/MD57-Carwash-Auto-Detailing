@@ -497,11 +497,15 @@
                 <div class="detail-row"><span class="detail-label">Service duration:</span><span class="detail-value" id="detServiceMinutes">-</span></div>
             </div>
             <div style="display: flex; gap: 10px; flex-direction: column;">
+                {% if session.get('role') in ['staff', 'admin'] %}
                 <button type="button" id="modalArrivedBtn" class="btn-secondary" style="display: none; width: 100%;"></button>
                 <button type="button" id="modalStartBtn" class="btn-primary" style="display: none; width: 100%;">Start Service Now</button>
                 <button type="button" id="modalCompleteBtn" class="btn-primary" style="display: none; width: 100%;"><i class="fa-solid fa-circle-check"></i> Mark as Complete</button>
+                {% endif %}
+                {% if session.get('role') == 'admin' %}
                 <button type="button" id="modalConfirmBtn" class="btn-primary" style="display: none; width: 100%;"><i class="fa-solid fa-circle-check"></i> Confirm - Send to Ready List</button>
                 <button type="button" id="modalRejectBtn" class="btn-secondary" style="display: none; width: 100%;"><i class="fa-solid fa-rotate-left"></i> Not Actually Done - Send Back</button>
+                {% endif %}
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeDetailModal()" style="flex: 1;">Close</button>
                     <button type="button" id="modalCancelBtn" class="btn-primary btn-danger" style="display: none; flex: 1;">Cancel Booking</button>
@@ -910,9 +914,11 @@
         // Reset every action button up front - each branch below only turns
         // on what applies to this booking's real (server-reported) status.
         [modalStartBtn, modalCompleteBtn, modalConfirmBtn, modalRejectBtn, modalCancelBtn, modalArrivedBtn,
-            detRecommendedRow, detAssignNote, detArrivedRow, detHoldRow].forEach(el => el.style.display = 'none');
-        modalStartBtn.innerText = 'Start Service Now';
-        modalStartBtn.disabled = false;
+            detRecommendedRow, detAssignNote, detArrivedRow, detHoldRow].filter(Boolean).forEach(el => el.style.display = 'none');
+        if (modalStartBtn) {
+            modalStartBtn.innerText = 'Start Service Now';
+            modalStartBtn.disabled = false;
+        }
 
         if (item.arrived_at && item.status === 'waiting') {
             detArrivedRow.style.display = 'flex';
@@ -922,10 +928,12 @@
         let isPendingStart = item.status === 'waiting';
         let isInProgress = item.status === 'in_progress';
         let checklistLink=document.getElementById('serviceChecklistLink');
-        if(!checklistLink){checklistLink=document.createElement('a');checklistLink.id='serviceChecklistLink';checklistLink.className='btn-secondary';modalCompleteBtn.before(checklistLink);}
+        if(!checklistLink && modalCompleteBtn){checklistLink=document.createElement('a');checklistLink.id='serviceChecklistLink';checklistLink.className='btn-secondary';modalCompleteBtn.before(checklistLink);}
+        if (checklistLink) {
         checklistLink.textContent='Service quality checklist';
         checklistLink.href='/service-checklist/'+item.id;
         checklistLink.style.display=(CURRENT_USER.role==='admin'||(CURRENT_USER.role==='staff'&&item.washer_id===CURRENT_USER.user_id))&&['in_progress','pending_confirmation'].includes(item.status)?'inline-flex':'none';
+        }
         // A job staff marked done waits here for admin to confirm (or send
         // it back) before it reaches Ready and the customer is notified.
         let isPendingConfirmation = item.status === 'pending_confirmation';
@@ -1046,6 +1054,10 @@
     // refresh. The server enforces who may do what (these buttons are only
     // shown to the roles allowed to use them).
     function postQueueAction(url, item, successTitle, failureText, connectionErrorText, chime, extraBody) {
+        if (!['staff', 'admin'].includes(CURRENT_USER.role)) {
+            showToast('Access Denied', 'Only shop personnel can update service progress.', 'error');
+            return;
+        }
         closeDetailModal();
         fetch(url, {
             method: 'POST',
